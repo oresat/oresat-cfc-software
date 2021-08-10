@@ -1,0 +1,10 @@
+[Unit]
+Description=OreSat CFC daemon
+
+[Service]
+Type=forking
+PIDFile=/run/oresat-cfcd.pid
+ExecStart=/usr/bin/python3 /usr/bin/oresat-cfc -d
+
+[Install]
+WantedBy=multi-user.target
