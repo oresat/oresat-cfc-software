@@ -42,6 +42,8 @@ sh_b = 0.000286451700000000000
 sh_c = 0.000003252255000000000
 sh_d = 0.000000045945010000000
 
+
+
 # __TecController allows control of the PIRT1280 TEC controller. However, this 
 # object should NEVER be instantiated anywhere but the singleton at the
 # bottom of this module
@@ -102,9 +104,23 @@ class __TecController:
     # run the PID controller loop every 250ms
     pid_period = 0.25
 
+    # list to hold a number of past samples for averaging
+    samples = []
+    num_samples = 20
+
+    # flags that the TEC temperature has past below zero since it has been
+    # enabled. Must be reset on disable and re-enable
+    past_zero_since_enable = False
+
+    # flags whether the TEC temperature is saturated. This is defined by the
+    # TEC first going below zero after being enabled, and then going above zero
+    # again when the TEC cannot maintain the temperature differential
+    saturated = False
+
     def __init__(self):
         # try and catch all exitting signals and disable the TEC. 
         # WARNING this may overwrite signal handlers of caller
+        # TODO use 'atexit' package instead
         signal.signal(signal.SIGINT, self._safe_exit)
         signal.signal(signal.SIGTERM, self._safe_exit)
         signal.signal(signal.SIGQUIT, self._safe_exit)
@@ -129,6 +145,7 @@ class __TecController:
         print("disabling TEC before exit")
         sys.exit(1)
 
+
     def start(self, setpoint):
 
         # first, get the lock so it can only be started once
@@ -142,6 +159,10 @@ class __TecController:
         # set the controller as enabled
         self.enabled = True
 
+        # reset the past zero and saturated flags
+        self.past_zero_since_enable = False
+        self.saturated = False
+
         # enable the timer thread that actually executes the PID loop
         self.timer = threading.Timer(self.pid_period, self._run)
         self.timer.start()
@@ -149,6 +170,7 @@ class __TecController:
 
     def set_temp(self, setpoint):
         self.pid.setpoint = setpoint
+
 
     def _disable_tec(self):
         gpio.set(tec_gpio, 0)
@@ -162,6 +184,10 @@ class __TecController:
 
     def stop(self):
         self.enabled = False
+
+        # reset the past zero and saturated flags
+        self.past_zero_since_enable = False
+        self.saturated = False
 
         # attempt to disable the GPIO here as well
         self._disable_tec()
@@ -178,6 +204,19 @@ class __TecController:
         except:
             pass
 
+    # get_moving_average returns the moving average of the TEC temperature,
+    # using the newly provided temperature sample
+    def get_moving_average(temp):
+        # pop the oldest sample if we have the max number of samples
+        if len(samples) >= num_samples:
+            samples.pop(0)
+    
+        # add the latest sample to the list
+        samples.append(temp)
+
+        # return the average
+        return sum(samples) / len(samples)
+
     def _run(self):
 
         with open(watchdog_file, 'w') as f:
@@ -189,6 +228,7 @@ class __TecController:
             logging.info("exitting TEC control thread")
             return
 
+        # TODO test this pleaseeeee!
         # if we are here then the controller is enabled, so schedule the next 
         # periodic run
         self.timer = threading.Timer(self.pid_period, self._run)
@@ -198,6 +238,23 @@ class __TecController:
         current_temp = self.get_temp()
         diff = self.pid(current_temp)
 
+        # get the moving average
+        avg = get_moving_average(current_temp)
+
+        # if the average goes below 0 since enabled, flag it
+        if avg <= 0:
+            log.info("temperature average went below zero")
+            self.past_zero_since_enable = True
+
+        # if the average goes above 0, after going below 0, since enabled, then
+        # the TEC is probably saturated so disable it
+        if avg > 0 and self.past_zero_since_enable:
+            log.warning("TEC is saturated, disabling...")
+            self.enabled = False
+            self.saturated = True
+            return
+
+        # drive the TEC power based on the PID output
         if diff < 0:
             if self.tec_state == 0:
                 logging.debug("enabled TEC")

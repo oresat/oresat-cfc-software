@@ -26,7 +26,8 @@ from pirt1280 import pirt1280
 
 DBUS_INTERFACE_NAME = "org.OreSat.CFC"
 
-tec_setpoint = -10
+# TODO confirm this
+tec_setpoint = -6
 
 # constants
 cols = 1280
@@ -136,10 +137,8 @@ def main():
         try:
             loop.run()
         except KeyboardInterrupt:
-            print("KEYBOARD")
             loop.quit()
         except Exception as e:
-            print("EXCEPTION")
             loop.quit()
 
     except Exception as e:
@@ -149,28 +148,38 @@ def main():
     return 1
 
 # TODO
-# - endpoint for temperature
-# - endpoint for number of pics taken
 # - endpoint for diskspace
-# - disable when cannot stay at temp?
-# - todo compress image
 
 
 class DBusServer():
 
-    # D-Bus interface(s) definition
+    # D-Bus interface definition
     dbus = """
     <node>
         <interface name="org.OreSat.CFC">
-            <property name="CFCState" type="s" access="read" />
+            <method name='EnableTec'>
+                <arg type='b' name='enable' direction='in'/>
+            </method>
+            <property name="TecSaturated" type="b" access="read" />
+            <property name="TecEnabled" type="b" access="read" />
+            <property name="TecTemp" type="d" access="read" />
             <property name="CaptureCount" type="u" access="read" />
         </interface>
     </node>
     """
-    
+   
+    # need to test these
     @property
-    def CFCState(self) -> str:
-        return "GOOD STATE"
+    def TecSaturated(self) -> bool:
+        return tec.saturated
+
+    @property
+    def TecEnabled(self) -> bool:
+        return tec.enabled
+
+    @property
+    def TecTemp(self) -> float:
+        return tec.get_temp()
 
     @property
     def CaptureCount(self) -> int:
@@ -179,6 +188,23 @@ class DBusServer():
         # return the number of files in the capture directory
         files = os.listdir(capture_dir)
         return len(files)
+
+    def EnableTec(self, enable):
+        """D-Bus Method to enable/disable TEC"""
+
+        if enable:
+            log.info("enabling TEC")
+            try:
+                tec.start(tec_setpoint)
+            except Exception as e:
+                log.error("error enabling TEC: ", e)
+        else:
+            log.info("disabling TEC")
+            try:
+                tec.stop()
+            except Exception as e:
+                log.error("error edisabling TEC: ", e)
+
 
 # TODO remove this
 if __name__ == "__main__":
