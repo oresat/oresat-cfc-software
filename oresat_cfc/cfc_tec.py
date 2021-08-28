@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import math
-import signal
 import time
 import gpio
 import logging
@@ -12,6 +11,7 @@ from datetime import datetime
 import threading
 import sys
 import traceback
+import atexit
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -118,12 +118,8 @@ class __TecController:
     saturated = False
 
     def __init__(self):
-        # try and catch all exitting signals and disable the TEC. 
-        # WARNING this may overwrite signal handlers of caller
-        # TODO use 'atexit' package instead
-        signal.signal(signal.SIGINT, self._safe_exit)
-        signal.signal(signal.SIGTERM, self._safe_exit)
-        signal.signal(signal.SIGQUIT, self._safe_exit)
+        # register an atexit handler to ALWAYS disable the TEC
+        atexit.register(self._safe_exit)
         
         self.lock = threading.Lock()
 

@@ -10,7 +10,6 @@ import os
 import io
 import logging
 from gi.repository import GLib
-import signal
 import threading
 import cv2
 
@@ -109,12 +108,6 @@ def get_frame_with_integration(intr):
         out.write(imgbuf)
 
 
-
-def kill_dbus(*args):
-    GLib.MainLoop().quit()
-    sys.exit(-1)
-
-
 def main():
     """The main for the oresat CFC daemon"""
 
@@ -128,11 +121,6 @@ def main():
         bus.publish(DBUS_INTERFACE_NAME, cfc)
 
         loop = GLib.MainLoop()
-
-        # TODO remove these
-        signal.signal(signal.SIGINT, kill_dbus)
-        signal.signal(signal.SIGTERM, kill_dbus)
-        signal.signal(signal.SIGQUIT, kill_dbus)
 
         try:
             loop.run()
@@ -149,6 +137,7 @@ def main():
 
 # TODO
 # - endpoint for diskspace
+# - errors endpoint
 
 
 class DBusServer():
@@ -171,25 +160,32 @@ class DBusServer():
     # need to test these
     @property
     def TecSaturated(self) -> bool:
+        log.debug("TecSaturated")
+        return True
         return tec.saturated
 
     @property
     def TecEnabled(self) -> bool:
+        log.debug("TecEnabled")
+        return True
         return tec.enabled
 
     @property
     def TecTemp(self) -> float:
+        log.debug("TecTemp")
+        return 15.0
         return tec.get_temp()
 
     @property
     def CaptureCount(self) -> int:
-        log.info("get capture count")
+        log.debug("CaptureCount")
         
         # return the number of files in the capture directory
         files = os.listdir(capture_dir)
         return len(files)
 
     def EnableTec(self, enable):
+        log.debug("Enable")
         """D-Bus Method to enable/disable TEC"""
 
         if enable:
@@ -205,7 +201,3 @@ class DBusServer():
             except Exception as e:
                 log.error("error edisabling TEC: ", e)
 
-
-# TODO remove this
-if __name__ == "__main__":
-    main()
