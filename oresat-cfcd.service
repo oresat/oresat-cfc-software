@@ -4,7 +4,7 @@ Description=OreSat CFC daemon
 [Service]
 Type=simple
 #PIDFile=/run/oresat-cfcd.pid
-ExecStart=/usr/bin/python3 /home/rew/oresat/oresat-cfc-software/oresat_cfc/main.py
+ExecStart=/usr/bin/python3 /home/oresat/oresat-cfc-software/oresat_cfc/__main__.py
 
 [Install]
 WantedBy=multi-user.target

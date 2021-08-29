@@ -11,17 +11,11 @@ import io
 import logging
 from gi.repository import GLib
 import threading
-import cv2
+from cfc_tec import ctrl as tec
+from pirt1280 import pirt1280
 
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
-
-# TODO remove this when on octavo
-try:
-    from cfc_tec import ctrl as tec
-except:
-    pass
-from pirt1280 import pirt1280
 
 DBUS_INTERFACE_NAME = "org.OreSat.CFC"
 
@@ -34,42 +28,37 @@ rows = 1024
 pixel_bytes = cols * rows * 2
 prucam_path = "/dev/prucam"
 
-capture_dir = "/home/rew/cfc_captures"
+capture_dir = "/home/oresat/cfc_captures"
 
 # instantiate the PIRT once here. 
 # TODO there is nothing wrong with doing this multiple times elsewhere
-# TODO remove 'try:' when on octavo
-try:
-    pirt = pirt1280()
-except:
-    pass
+pirt = pirt1280()
 
 def run_cfc_test_forever():
-    try: # TODO remove on octavo
+    try:
+        # enable the image sensor
         pirt.enable()
-    except:
-        pass
 
-    # wait a sec
-    time.sleep(1)
-    
-    try: # TODO remove on octavo
-        tec.start(tec_setpoint)
-    except:
-        pass
-
-    while True:
-        log.info("capturing...")
-        
-        get_frame_with_integration(0.01)
-
+        # wait a sec
         time.sleep(1)
+        
+        # set the TEC temperature
+        tec.start(tec_setpoint)
+
+        while True:
+            log.info("capturing...")
+            
+            get_frame_with_integration(0.01)
+
+            time.sleep(1)
+    except Exception as e:
+        log.error("error running cfc:", e)
+        time.sleep(10)
+        sys.exit(1)
 
 def get_frame_with_integration(intr):
-    try: # TODO remove on octavo
-        pirt.set_integration(intr)
-    except:
-        pass
+    # set the integration for this frame
+    pirt.set_integration(intr)
     
     # wait a moment for settings to apply
     time.sleep(0.05)
@@ -87,22 +76,15 @@ def get_frame_with_integration(intr):
     # close the char device
     os.close(fd)
 
-    # TODO make filename with time, integration time, and ....?
-    
-    temp = -12.1
-    try:
-        temp = tec.get_temp()
-    except:
-        pass
+    # get the current temperature 
+    temp = tec.get_temp()
 
     # replace decimal point with 'p' to not mess up extension
     temp_str = str(temp).replace(".","p")
     
+    # make the filename
     filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".gz"
    
-    # TODO test image
-    # TODO compress image?
-
     # write raw buffer out to file gzip'd
     with gzip.open(capture_dir + "/" + filename, 'wb') as out:
         out.write(imgbuf)
@@ -131,7 +113,6 @@ def main():
 
     except Exception as e:
         print("exception:", e)
-
         return 0
     return 1
 
@@ -161,19 +142,16 @@ class DBusServer():
     @property
     def TecSaturated(self) -> bool:
         log.debug("TecSaturated")
-        return True
         return tec.saturated
 
     @property
     def TecEnabled(self) -> bool:
         log.debug("TecEnabled")
-        return True
         return tec.enabled
 
     @property
     def TecTemp(self) -> float:
         log.debug("TecTemp")
-        return 15.0
         return tec.get_temp()
 
     @property

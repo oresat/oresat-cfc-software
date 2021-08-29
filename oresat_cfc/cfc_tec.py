@@ -202,16 +202,16 @@ class __TecController:
 
     # get_moving_average returns the moving average of the TEC temperature,
     # using the newly provided temperature sample
-    def get_moving_average(temp):
+    def get_moving_average(self, temp):
         # pop the oldest sample if we have the max number of samples
-        if len(samples) >= num_samples:
-            samples.pop(0)
+        if len(self.samples) >= self.num_samples:
+            self.samples.pop(0)
     
         # add the latest sample to the list
-        samples.append(temp)
+        self.samples.append(temp)
 
         # return the average
-        return sum(samples) / len(samples)
+        return sum(self.samples) / len(self.samples)
 
     def _run(self):
 
@@ -235,7 +235,7 @@ class __TecController:
         diff = self.pid(current_temp)
 
         # get the moving average
-        avg = get_moving_average(current_temp)
+        avg = self.get_moving_average(current_temp)
 
         # if the average goes below 0 since enabled, flag it
         if avg <= 0:
