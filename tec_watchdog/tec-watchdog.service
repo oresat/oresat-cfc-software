@@ -6,9 +6,8 @@ Type=simple
 Restart=always
 RestartSec=5s
 # working directory assume oresat user and repo in home dir
-# FFFFFFFFFFFFFUUUUUUUUUUUCCCCCCCCCKKKKKK fix these
-WorkingDirectory=/home/oresat/oresat-linux-prucam/testing/cfc
-ExecStart=/home/oresat/oresat-linux-prucam/testing/cfc/tec_watchdog.py
+WorkingDirectory=/home/oresat/oresat-cfc-software/tec_watchdog
+ExecStart=/home/oresat/oresat-cfc-software/tec_watchdog/tec_watchdog.py
 
 [Install]
 WantedBy=multi-user.target

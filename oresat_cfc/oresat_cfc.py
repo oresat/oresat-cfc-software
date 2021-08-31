@@ -69,28 +69,39 @@ def run_cfc_test_forever():
     try:
         # initialize the PRUs
         init_prus()
+        os.system("sudo config-pin P1_36 pruin")
+        os.system("sudo config-pin P1_33 pruin")
+        os.system("sudo config-pin P2_32 pruin")
+        os.system("sudo config-pin P2_30 pruin")
+        os.system("sudo config-pin P1_31 pruin")
+        os.system("sudo config-pin P2_34 pruin")
+        os.system("sudo config-pin P2_28 pruin")
+        os.system("sudo config-pin P1_20 pruin")
+        os.system("sudo config-pin P1_29 pruout")
+        os.system("sudo config-pin P2_24 pruout")
+        os.system("sudo config-pin P2_33 pruout")
 
         # enable the image sensor
         pirt.enable()
 
         # wait a sec
-        time.sleep(1)
+        time.sleep(2)
         
         # set the TEC temperature
-        tec.start(tec_setpoint)
+        # TODO FIXME
+        #tec.start(tec_setpoint)
 
         while True:
             log.info("capturing...")
             
             get_frame_with_integration(0.01)
 
-            time.sleep(180)
+            time.sleep(5)
     except Exception as e:
         log.error("error running cfc: " + str(e))
         time.sleep(10)
         # use os._exit because sys.exit does not work from a thread
-        # TODO OMG UNCOMMENT THIS FOR FLIGHT, leave like this only for testing!
-        #os._exit(1)
+        os._exit(1)
 
 def get_frame_with_integration(intr):
     # set the integration for this frame
@@ -119,10 +130,11 @@ def get_frame_with_integration(intr):
     temp_str = str(temp).replace(".","p")
     
     # make the filename
-    filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".gz"
+    filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".bin"
+    #filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".gz"
    
-    # write raw buffer out to file gzip'd
-    with gzip.open(capture_dir + "/" + filename, 'wb') as out:
+    # write raw buffer out to file
+    with open(capture_dir + "/" + filename, 'wb') as out:
         out.write(imgbuf)
 
 
