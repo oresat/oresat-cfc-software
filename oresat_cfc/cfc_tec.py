@@ -14,6 +14,7 @@ import traceback
 import atexit
 
 logging.getLogger().setLevel(logging.DEBUG)
+log = logging.getLogger()
 
 tec_gpio = 88
 
@@ -239,7 +240,6 @@ class __TecController:
 
         # if the average goes below 0 since enabled, flag it
         if avg <= 0:
-            log.info("temperature average went below zero")
             self.past_zero_since_enable = True
 
         # if the average goes above 0, after going below 0, since enabled, then

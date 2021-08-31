@@ -34,8 +34,42 @@ capture_dir = "/home/oresat/cfc_captures"
 # TODO there is nothing wrong with doing this multiple times elsewhere
 pirt = pirt1280()
 
+pru0_path = "/sys/class/remoteproc/remoteproc1/"
+pru1_path = "/sys/class/remoteproc/remoteproc2/"
+pru0_fw = "prucam_pru0_fw.out"
+pru1_fw = "prucam_pru1_fw.out"
+
+def init_prus():
+    # stop the PRUs. This can throw as error if they are already stopped, so ignore
+    try:
+        with open(pru0_path + "state", 'w') as f:
+            f.write("stop")
+    except Exception as e:
+        log.warning(e)
+    try:
+        with open(pru1_path + "state", 'w') as f:
+            f.write("stop")
+    except Exception as e:
+        log.warning(e)
+
+    # first, write the firmware name
+    with open(pru0_path + "firmware", 'w') as f:
+        f.write(pru0_fw)
+    with open(pru1_path + "firmware", 'w') as f:
+        f.write(pru1_fw)
+    
+    # finally, start the PRUs
+    with open(pru0_path + "state", 'w') as f:
+        f.write("start")
+    with open(pru1_path + "state", 'w') as f:
+        f.write("start")
+
+
 def run_cfc_test_forever():
     try:
+        # initialize the PRUs
+        init_prus()
+
         # enable the image sensor
         pirt.enable()
 
@@ -50,11 +84,13 @@ def run_cfc_test_forever():
             
             get_frame_with_integration(0.01)
 
-            time.sleep(1)
+            time.sleep(180)
     except Exception as e:
-        log.error("error running cfc:", e)
+        log.error("error running cfc: " + str(e))
         time.sleep(10)
-        sys.exit(1)
+        # use os._exit because sys.exit does not work from a thread
+        # TODO OMG UNCOMMENT THIS FOR FLIGHT, leave like this only for testing!
+        #os._exit(1)
 
 def get_frame_with_integration(intr):
     # set the integration for this frame
@@ -171,11 +207,11 @@ class DBusServer():
             try:
                 tec.start(tec_setpoint)
             except Exception as e:
-                log.error("error enabling TEC: ", e)
+                log.error("error enabling TEC: " + str(e))
         else:
             log.info("disabling TEC")
             try:
                 tec.stop()
             except Exception as e:
-                log.error("error edisabling TEC: ", e)
+                log.error("error disabling TEC: " + str(e))
 
