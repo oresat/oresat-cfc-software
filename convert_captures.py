@@ -16,8 +16,8 @@ capts = os.listdir(capt_dir)
 
 for capt in capts:
     # only try to convert gzip'd files
-    #if not capt.endswith(".gz"):
-    if not capt.endswith(".bin"):
+    if not capt.endswith(".gz"):
+    #if not capt.endswith(".bin"):
         continue
 
     # create the full file path
@@ -25,13 +25,20 @@ for capt in capts:
     print(path)
 
     # open the file
-    #with gzip.open(path, 'rb') as f:
-    with open(path, 'rb') as f:
+    with gzip.open(path, 'rb') as f:
+    #with open(path, 'rb') as f:
         # read the decompressed bytes
         buf = f.read()
 
         # read image bytes into ndarray
         img = np.frombuffer(buf, dtype=np.uint16).reshape(rows, cols)
+
+        # flip the image because it is read upside down
+        img = cv2.flip(img, 0)
+        img = cv2.flip(img, 1)
+
+        # invert image colors to look normal
+        img = cv2.bitwise_not(img)
 
         # try to encode the image as png
         ok, encoded = cv2.imencode(".png", img, params=[cv2.CV_16U])
