@@ -130,18 +130,16 @@ def get_frame_with_integration(intr):
     # get the current temperature 
     temp = tec.get_temp()
 
-    # replace decimal point with 'p' to not mess up extension
-    temp_str = str(temp).replace(".","p")
-
+    # convert the temperature to mC so we dont need a decimal point
     temp_hundreths_of_degree = int(temp * 100)
 
+    # convert the integration time to uS so we dont need a decimal point
     intr_us = int(intr * 1000000)
     
     # make the filename
-    #filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".bin"
-    filename = "capt_" + str(intr_us) + "_" + str(temp_hundreths_of_degree) + "mC_" + str(int(time.time())) + ".gz"
+    filename = str(int(time.time())) + "_" + str(intr_us) + "_" + str(temp_hundreths_of_degree) + "mC" + ".gz"
    
-    # write raw buffer out to file
+    # write raw buffer out to file gzip'd
     with gzip.open(capture_dir + "/" + filename, 'wb', compresslevel=3) as out:
         out.write(imgbuf)
 
