@@ -16,8 +16,8 @@ capts = os.listdir(capt_dir)
 
 for capt in capts:
     # only try to convert gzip'd files
-    #if not capt.endswith(".gz"):
-    if not capt.endswith(".bin"):
+    if not capt.endswith(".gz"):
+    #if not capt.endswith(".bin"):
         continue
 
     # create the full file path
@@ -25,8 +25,8 @@ for capt in capts:
     print(path)
 
     # open the file
-    #with gzip.open(path, 'rb') as f:
-    with open(path, 'rb') as f:
+    with gzip.open(path, 'rb') as f:
+    #with open(path, 'rb') as f:
         # read the decompressed bytes
         buf = f.read()
 
