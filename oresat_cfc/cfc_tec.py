@@ -24,6 +24,12 @@ watchdog_file = '/tmp/tec.watchdog'
 
 adc_file = None
 
+# the difference between the current temp and the setpoint at which the TEC is
+# considered saturated and therefore should be disabled. Note that it would 
+# only be considered saturated after it first crossed below the saturation 
+# and then came above it as the TEC because saturated with heat
+saturation_diff = 6
+
 # resistance of the upper resistor in the divider
 r1 = 10000
 
@@ -111,7 +117,7 @@ class __TecController:
 
     # flags that the TEC temperature has past below zero since it has been
     # enabled. Must be reset on disable and re-enable
-    past_zero_since_enable = False
+    past_saturation_pt_since_enable = False
 
     # flags whether the TEC temperature is saturated. This is defined by the
     # TEC first going below zero after being enabled, and then going above zero
@@ -157,16 +163,16 @@ class __TecController:
         self.enabled = True
 
         # reset the past zero and saturated flags
-        self.past_zero_since_enable = False
+        self.past_saturation_pt_since_enable = False
         self.saturated = False
 
         # enable the timer thread that actually executes the PID loop
         self.timer = threading.Timer(self.pid_period, self._run)
         self.timer.start()
 
-
-    def set_temp(self, setpoint):
-        self.pid.setpoint = setpoint
+# TODO disabling so it doesnt interfere with saturation logic
+#    def set_temp(self, setpoint):
+#        self.pid.setpoint = setpoint
 
 
     def _disable_tec(self):
@@ -183,7 +189,7 @@ class __TecController:
         self.enabled = False
 
         # reset the past zero and saturated flags
-        self.past_zero_since_enable = False
+        self.past_saturation_pt_since_enable = False
         self.saturated = False
 
         # attempt to disable the GPIO here as well
@@ -238,13 +244,16 @@ class __TecController:
         # get the moving average
         avg = self.get_moving_average(current_temp)
 
-        # if the average goes below 0 since enabled, flag it
-        if avg <= 0:
-            self.past_zero_since_enable = True
+        # calculate the saturation point based on the setpoint
+        saturation_pt = self.pid.setpoint + saturation_diff
 
-        # if the average goes above 0, after going below 0, since enabled, then
-        # the TEC is probably saturated so disable it
-        if avg > 0 and self.past_zero_since_enable:
+        # if the average goes below the saturation point since enabled, flag it
+        if avg <= saturation_pt:
+            self.past_saturation_pt_since_enable = True
+
+        # if the average goes above the saturation point, after going below it, 
+        # since enabled, then the TEC is probably saturated so disable it
+        if avg > saturation_pt and self.past_saturation_pt_since_enable:
             log.warning("TEC is saturated, disabling...")
             self.enabled = False
             self.saturated = True

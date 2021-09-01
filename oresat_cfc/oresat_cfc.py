@@ -19,8 +19,9 @@ log.setLevel(logging.DEBUG)
 
 DBUS_INTERFACE_NAME = "org.OreSat.CFC"
 
-# TODO confirm this
-tec_setpoint = -6
+# TODO change this back to -6
+#tec_setpoint = -6
+tec_setpoint = 10
 
 # constants
 cols = 1280
@@ -29,6 +30,8 @@ pixel_bytes = cols * rows * 2
 prucam_path = "/dev/prucam"
 
 capture_dir = "/home/oresat/cfc_captures"
+
+intr_times = [0.00125, 0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.04]
 
 # instantiate the PIRT once here. 
 # TODO there is nothing wrong with doing this multiple times elsewhere
@@ -88,15 +91,16 @@ def run_cfc_test_forever():
         time.sleep(2)
         
         # set the TEC temperature
-        # TODO FIXME
-        #tec.start(tec_setpoint)
+        # TODO FIXME set to -6 above
+        tec.start(tec_setpoint)
 
         while True:
             log.info("capturing...")
             
-            get_frame_with_integration(0.01)
+            for intr in intr_times:
+                get_frame_with_integration(intr)
 
-            time.sleep(5)
+            time.sleep(30)
     except Exception as e:
         log.error("error running cfc: " + str(e))
         time.sleep(10)
@@ -128,15 +132,18 @@ def get_frame_with_integration(intr):
 
     # replace decimal point with 'p' to not mess up extension
     temp_str = str(temp).replace(".","p")
+
+    temp_hundreths_of_degree = int(temp * 100)
+
+    intr_us = int(intr * 1000000)
     
     # make the filename
-    filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".bin"
-    #filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".gz"
+    #filename = "capt_" + str(intr) + "_" + temp_str + "C_" + str(int(time.time())) + ".bin"
+    filename = "capt_" + str(intr_us) + "_" + str(temp_hundreths_of_degree) + "mC_" + str(int(time.time())) + ".gz"
    
     # write raw buffer out to file
-    with open(capture_dir + "/" + filename, 'wb') as out:
+    with gzip.open(capture_dir + "/" + filename, 'wb', compresslevel=3) as out:
         out.write(imgbuf)
-
 
 def main():
     """The main for the oresat CFC daemon"""
