@@ -102,7 +102,7 @@ def run_cfc_test_forever():
         tec_sat_timeout = 5 * 60 # 5 minutes in seconds
         
         # maximum temperature at which we will start the TEC
-        tec_max_start_temp = 36 # TODO reduce to 32
+        tec_max_start_temp = 32
 
         # record the start time
         start_time = datetime.utcnow()

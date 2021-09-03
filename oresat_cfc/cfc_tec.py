@@ -14,7 +14,7 @@ import traceback
 import atexit
 
 log = logging.getLogger("cfc_tec")
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 #log = logging.getLogger()
 
 tec_gpio = 88
