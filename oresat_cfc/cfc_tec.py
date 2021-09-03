@@ -138,6 +138,11 @@ class __TecController:
         gpio.setup(tec_gpio, gpio.OUT)
         self._disable_tec()
 
+        # reset the past zero and saturated flags
+        self.past_saturation_pt_since_enable = False
+        self.saturated = False
+
+
         # timer holds the period thread object
         self.timer = None
 
@@ -162,9 +167,10 @@ class __TecController:
         # set the controller as enabled
         self.enabled = True
 
-        # reset the past zero and saturated flags
+        # reset the past zero and saturated flags and times
         self.past_saturation_pt_since_enable = False
         self.saturated = False
+        self.saturation_time = datetime.min
 
         # enable the timer thread that actually executes the PID loop
         self.timer = threading.Timer(self.pid_period, self._run)
@@ -187,10 +193,6 @@ class __TecController:
 
     def stop(self):
         self.enabled = False
-
-        # reset the past zero and saturated flags
-        self.past_saturation_pt_since_enable = False
-        self.saturated = False
 
         # attempt to disable the GPIO here as well
         self._disable_tec()
@@ -257,6 +259,7 @@ class __TecController:
             log.warning("TEC is saturated, disabling...")
             self.enabled = False
             self.saturated = True
+            self.saturation_time = datetime.utcnow()
             return
 
         # drive the TEC power based on the PID output

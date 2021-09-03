@@ -117,9 +117,10 @@ def run_cfc_test_forever():
                 log.warn("TEC reached {}C, disabling!".format(temp))
 
             # wait 'tec_start_wait' before ever starting the TEC
-            elif (datetime.utcnow() - start_time).seconds < tec_start_wait:
-                log.info("TEC off for {} more seconds".format(tec_start_wait - (datetime.utcnow() - start_time).seconds))
-                tec.stop()
+            # TODO ADD BACK
+            #elif (datetime.utcnow() - start_time).seconds < tec_start_wait:
+            #    log.info("TEC off for {} more seconds".format(tec_start_wait - (datetime.utcnow() - start_time).seconds))
+            #    tec.stop()
 
             # If the TEC is not saturated, not enabled, and below the threshold 
             # to start, enable this. This will catch the initial turn on state 
