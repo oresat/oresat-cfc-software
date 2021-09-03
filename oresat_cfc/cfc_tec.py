@@ -13,8 +13,9 @@ import sys
 import traceback
 import atexit
 
-logging.getLogger().setLevel(logging.DEBUG)
-log = logging.getLogger()
+log = logging.getLogger("cfc_tec")
+log.setLevel(logging.DEBUG)
+#log = logging.getLogger()
 
 tec_gpio = 88
 
@@ -265,13 +266,13 @@ class __TecController:
 
         # drive the TEC power based on the PID output
         if diff < 0:
+            self._enable_tec()
             if self.tec_state == 0:
                 logging.debug("enabled TEC")
-                self._enable_tec()
         else:
+            self._disable_tec()
             if self.tec_state == 1:
                 logging.debug("disabling TEC")
-                self._disable_tec()
             
         msg = {
             'temp': current_temp,

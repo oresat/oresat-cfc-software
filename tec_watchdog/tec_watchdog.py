@@ -6,6 +6,10 @@
 import gpio
 from datetime import datetime
 import time
+import logging
+
+log = logging.getLogger()
+log.setLevel(logging.DEBUG)
 
 watchdog_file = '/tmp/tec.watchdog'
 tec_gpio = 88
@@ -20,7 +24,7 @@ def check_timestamp():
         ts_str = f.read()
         ts = int(ts_str)
 
-        print("last TEC controller timestamp: ", ts)
+        log.debug("last TEC controller timestamp: " + str(ts))
         last = datetime.utcfromtimestamp(ts)
 
         if (datetime.now() - last).total_seconds() > timeout:
@@ -33,7 +37,7 @@ while True:
     try:
         check_timestamp()
     except Exception as e:
-        print("error checking TEC timestamp, disabling: ", e)
+        log.warn("error checking TEC timestamp, disabling: " + str(e))
         gpio.setup(tec_gpio, gpio.OUT)
         gpio.set(tec_gpio, 0)
         time.sleep(timeout)
