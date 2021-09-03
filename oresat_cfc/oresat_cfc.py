@@ -17,6 +17,7 @@ from pirt1280 import pirt1280
 import atexit
 import random
 import string
+from pathlib import Path
 
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
@@ -38,7 +39,6 @@ capture_dir = "/home/oresat/cfc_captures"
 intr_times = [0.0025, 0.005, 0.01, 0.02]
 
 # instantiate the PIRT once here. 
-# TODO there is nothing wrong with doing this multiple times elsewhere
 pirt = pirt1280()
 
 pru0_path = "/sys/class/remoteproc/remoteproc1/"
@@ -74,8 +74,12 @@ def init_prus():
 
 def run_cfc_test_forever():
     try:
+        # TODO test me
+        Path("/home/oresat/cfc_captures").mkdir(parents=True, exist_ok=True)
+
         # initialize the PRUs
         init_prus()
+        # init the pins, sorry this is jank
         os.system("sudo config-pin P1_36 pruin")
         os.system("sudo config-pin P1_33 pruin")
         os.system("sudo config-pin P2_32 pruin")
@@ -98,7 +102,7 @@ def run_cfc_test_forever():
         tec_sat_timeout = 5 * 60 # 5 minutes in seconds
         
         # maximum temperature at which we will start the TEC
-        tec_max_start_temp = 32 # TODO fix this
+        tec_max_start_temp = 36 # TODO reduce to 32
 
         # record the start time
         start_time = datetime.utcnow()
@@ -219,10 +223,6 @@ def main():
         print("exception:", e)
         return 0
     return 1
-
-# TODO
-# - endpoint for diskspace
-# - errors endpoint
 
 
 class DBusServer():

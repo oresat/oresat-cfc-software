@@ -171,7 +171,7 @@ class __TecController:
         self.past_saturation_pt_since_enable = False
         self.saturated = False
         self.saturation_time = datetime.min
-
+        
         # enable the timer thread that actually executes the PID loop
         self.timer = threading.Timer(self.pid_period, self._run)
         self.timer.start()
@@ -206,7 +206,8 @@ class __TecController:
         # finally, release the lock
         try:
             self.lock.release()
-        except:
+        except Exception as e:
+            logging.error("error releasing lock: " + str(e))
             pass
 
     # get_moving_average returns the moving average of the TEC temperature,
@@ -233,7 +234,6 @@ class __TecController:
             logging.info("exitting TEC control thread")
             return
 
-        # TODO test this pleaseeeee!
         # if we are here then the controller is enabled, so schedule the next 
         # periodic run
         self.timer = threading.Timer(self.pid_period, self._run)
@@ -260,6 +260,7 @@ class __TecController:
             self.enabled = False
             self.saturated = True
             self.saturation_time = datetime.utcnow()
+            self.stop()
             return
 
         # drive the TEC power based on the PID output
