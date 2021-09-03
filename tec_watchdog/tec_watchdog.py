@@ -36,4 +36,5 @@ while True:
         print("error checking TEC timestamp, disabling: ", e)
         gpio.setup(tec_gpio, gpio.OUT)
         gpio.set(tec_gpio, 0)
+        time.sleep(timeout)
 

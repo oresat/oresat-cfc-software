@@ -10,9 +10,13 @@ import os
 import io
 import logging
 from gi.repository import GLib
+from datetime import datetime
 import threading
 from cfc_tec import ctrl as tec
 from pirt1280 import pirt1280
+import atexit
+import random
+import string
 
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
@@ -21,7 +25,7 @@ DBUS_INTERFACE_NAME = "org.OreSat.CFC"
 
 # TODO change this back to -6
 #tec_setpoint = -6
-tec_setpoint = 10
+tec_setpoint = 5
 
 # constants
 cols = 1280
@@ -31,7 +35,7 @@ prucam_path = "/dev/prucam"
 
 capture_dir = "/home/oresat/cfc_captures"
 
-intr_times = [0.00125, 0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.04]
+intr_times = [0.0025, 0.005, 0.01, 0.02]
 
 # instantiate the PIRT once here. 
 # TODO there is nothing wrong with doing this multiple times elsewhere
@@ -89,23 +93,67 @@ def run_cfc_test_forever():
 
         # wait a sec
         time.sleep(2)
+
+        # how long for temperature to equalize after the TEC is saturated
+        tec_sat_timeout = 5 * 60 # 5 minutes in seconds
         
-        # set the TEC temperature
-        # TODO FIXME set to -6 above
-        tec.start(tec_setpoint)
+        # maximum temperature at which we will start the TEC
+        tec_max_start_temp = 32 # TODO fix this
+
+        # record the start time
+        start_time = datetime.utcnow()
+        tec_start_wait = 60 * 10
 
         while True:
             log.info("capturing...")
-            
+
+            temp = tec.get_temp()
+
+            # handle enabling the TEC
+
+            # holy fuck, somehow we hit 40C, turn the TEC off immediately
+            if temp >= 40:
+                tec.stop()
+                log.warn("TEC reached {}C, disabling!".format(temp))
+
+            # wait 'tec_start_wait' before ever starting the TEC
+            elif (datetime.utcnow() - start_time).seconds < tec_start_wait:
+                log.info("TEC off for {} more seconds".format(tec_start_wait - (datetime.utcnow() - start_time).seconds))
+                tec.stop()
+
+            # If the TEC is not saturated, not enabled, and below the threshold 
+            # to start, enable this. This will catch the initial turn on state 
+            # because it starts as not enabled or satureated, and hopefully 
+            # cold enough to use
+            elif temp <= tec_max_start_temp and not tec.enabled and not tec.saturated:
+                log.info("starting TEC b/c it is at {}C, and not enabled or saturated".format(temp))
+                tec.start(tec_setpoint)
+
+            # if the TEC is/was saturated, but we have waited long enough since 
+            # saturation, and it is below the threshold, start it again. This 
+            # handles the case where the TEC was saturated and disabled, and we 
+            # waited a while for it to cool off
+            elif tec.saturated and ((datetime.utcnow() - tec.saturation_time).seconds > tec_sat_timeout) and temp <= tec_max_start_temp:
+                log.info("restarting TEC b/c is is at {}C, and was previously saturated but has cooled".format(temp))
+                tec.start(tec_setpoint)
+                    
+            # capture frames at all integration times
             for intr in intr_times:
                 get_frame_with_integration(intr)
+            
+            # wait a while before trying again
+            time.sleep(15)
 
-            time.sleep(30)
     except Exception as e:
         log.error("error running cfc: " + str(e))
         time.sleep(10)
         # use os._exit because sys.exit does not work from a thread
         os._exit(1)
+
+
+def randomword(length):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))
 
 def get_frame_with_integration(intr):
     # set the integration for this frame
@@ -137,7 +185,7 @@ def get_frame_with_integration(intr):
     intr_us = int(intr * 1000000)
     
     # make the filename
-    filename = str(int(time.time())) + "_" + str(intr_us) + "_" + str(temp_hundreths_of_degree) + "mC" + ".gz"
+    filename = str(int(time.time())) + "_" + str(intr_us) + "_" + str(temp_hundreths_of_degree) + "mC" + "_" + randomword(8) + ".gz"
    
     # write raw buffer out to file gzip'd
     with gzip.open(capture_dir + "/" + filename, 'wb', compresslevel=3) as out:
@@ -147,6 +195,8 @@ def main():
     """The main for the oresat CFC daemon"""
 
     try:
+        atexit.register(tec.stop)
+
         # run test in separate thread
         threading.Thread(target=run_cfc_test_forever).start()
 
