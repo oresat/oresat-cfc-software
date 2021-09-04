@@ -26,9 +26,13 @@ for capt in capts:
 
     # open the file
     with gzip.open(path, 'rb') as f:
-    #with open(path, 'rb') as f:
+    #with open(path, 'rb') as f:S
+        print(path)
         # read the decompressed bytes
         buf = f.read()
+
+        if len(buf) == 0:
+            continue
 
         # read image bytes into ndarray
         img = np.frombuffer(buf, dtype=np.uint16).reshape(rows, cols)
@@ -46,8 +50,8 @@ for capt in capts:
             raise Exception("error encoding image")
 
         # write the file as a png
-        #png_path = path.replace(".gz", ".png")
-        png_path = path.replace(".bin", ".png")
+        png_path = path.replace(".gz", ".png")
+        #png_path = path.replace(".bin", ".png")
         with open(png_path, 'wb') as png:
             png.write(encoded.tobytes())
 
