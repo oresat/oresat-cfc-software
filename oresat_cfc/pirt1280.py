@@ -1,30 +1,14 @@
-#!/usr/bin/python3
-import gpio
+import io
+import os
+from time import sleep
+
 import spidev
-import time
-import logging 
-import argparse
-
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-
-arg = argparse.ArgumentParser()
-arg.add_argument('--enable', action='store_true', help="enable the sensor")
-arg.add_argument('--disable', action='store_true', help="disable the sensor")
-arg.add_argument('-v', action='store_true', help="enable debug logging")
-arg.add_argument('--integration', action='store', type=float, help="set integration time in seconds")
-
-args = arg.parse_args()
-
-log.debug("ENABLE: {}".format(args.enable))
-log.debug("DISABLE: {}".format(args.disable))
-log.debug("VERBOSE: {}".format(args.v))
-log.debug("INTEGRATION: {}".format(args.integration))
+import gpio
 
 sensor_enable_gpio = 86
 
 # SPI 100KHz
-spi_hz= 100000
+spi_hz = 100000
 
 # register addresses
 com = 0x01
@@ -62,8 +46,8 @@ reg_wr = 0x40
 read_back_wait = 0.1
 
 # refclk
-refclk = 16000000 # 16MHz
-refclk_cycle = 1 / refclk # 16MHz period
+refclk = 16000000  # 16MHz
+refclk_cycle = 1 / refclk  # 16MHz period
 
 # row params
 default_cws = 1400
@@ -71,28 +55,39 @@ dummy_pixels = 8
 sync_pixels = 2
 bytes_per_pixel = 2
 rows = 1024
-pix_clks_per_refclk = 4 # 4 64MHz clocks per 16MHZ refclk 
+pix_clks_per_refclk = 4  # 4 64MHz clocks per 16MHZ refclk
 
 # calculate the readout time
-readout_refclks = (((default_cws + dummy_pixels + sync_pixels) * bytes_per_pixel) * rows) / pix_clks_per_refclk
-readout_margin = 1.1 # scalar to increase readout time for safety
+readout_refclks = (((default_cws + dummy_pixels + sync_pixels) *
+                    bytes_per_pixel) * rows) / pix_clks_per_refclk
+readout_margin = 1.1  # scalar to increase readout time for safety
 
-class pirt1280:
+
+class PIRT1280:
+    '''The PIRT1280 camera'''
+
+    COLS = 1280
+    ROWS = 1024
+    PIXEL_BYTES = COLS * ROWS * 2
+    PRUCAM_PATH = '/dev/prucam'
 
     def __init__(self):
+
         # init SPI
         self.spi = spidev.SpiDev()
-        self.spi.open(1, 1) # /dev/spidev1.1
+        self.spi.open(1, 1)  # /dev/spidev1.1
         self.spi.max_speed_hz = spi_hz
 
+    def __del__(self):
+        self.disable()
 
     def enable(self):
-        log.info("enabling PIRT1280...")
+
         # set the enable GPIO high
         gpio.setup(sensor_enable_gpio, gpio.OUT)
         gpio.set(sensor_enable_gpio, 1)
 
-        time.sleep(read_back_wait)
+        sleep(read_back_wait)
 
         # TODO set ROFF register to 8 to start at row 8
         # TODO I might be able to turn down CWS or use defauth of 1279
@@ -103,126 +98,99 @@ class pirt1280:
         self.set_single_lane()
         self.set_integration(0.001)
 
-
     def disable(self):
-        log.info("Disabling PIRT1280...")
+
         gpio.setup(sensor_enable_gpio, gpio.OUT)
         gpio.set(sensor_enable_gpio, 0)
 
-
     def set_single_lane(self):
         # read current CONF1 value
-        read = self.read_reg(conf1)
-        log.debug("EXISTING CONF1: {} {}".format(hex(read[0]), read[0]))
+        read = self._read_reg(conf1)
 
         # clear bits 6 & 7 of CONF1 and write it back
         new = read[0] & 0x3F
         self.set_conf1(new)
 
         # wait a sec for it to apply
-        time.sleep(read_back_wait)
+        sleep(read_back_wait)
 
         # read back CONF1
-        read = self.read_reg(conf1)
-        log.debug("NEW CONF1: {} {}".format(hex(read[0]), read[0]))
+        read = self._read_reg(conf1)
 
     def set_com(self, val):
         self.spi.writebytes([com | reg_wr, val])
 
-    # set_coff sets the column offset registers
     def set_coff(self, coff):
-        self.set_16b_reg("COFF", coff, coff0, coff1)
+        '''set_coff sets the column offset registers'''
+        self.set_16b_reg('COFF', coff, coff0, coff1)
 
-
-    # set_cws sets the column window size
     def set_cws(self, cws):
-        self.set_16b_reg("CWS", cws, cws0, cws1)
+        '''set_cws sets the column window size'''
+        self.set_16b_reg('CWS', cws, cws0, cws1)
 
-
-    # set_hb sets the horizontal blanking registers
     def set_hb(self, hb):
-        self.set_16b_reg("HB", hb, hb0, hb1)
+        '''set_hb sets the horizontal blanking registers'''
+        self.set_16b_reg('HB', hb, hb0, hb1)
 
-
-    # set_roff sets the row offset register
     def set_roff(self, roff):
-        self.set_16b_reg("ROFF", roff, roff0, roff1)
+        '''set_roff sets the row offset register'''
+        self.set_16b_reg('ROFF', roff, roff0, roff1)
 
-    
-    # set_rws sets the row window size register
     def set_rws(self, rws):
-        self.set_16b_reg("RWS", rws, rws0, rws1)
+        '''set_rws sets the row window size register'''
+        self.set_16b_reg('RWS', rws, rws0, rws1)
 
-
-    # set_16b_reg writes the passed value to the passed registers as a 16 bit
-    # little-endian integer.
     def set_16b_reg(self, name, val, reg0, reg1):
+        '''
+        set_16b_reg writes the passed value to the passed registers as a 16 bit
+        little-endian integer.
+        '''
+
         # convert the value to little-endian bytes
         b = val.to_bytes(2, 'little')
-
-        log.debug("Set {} {} ({}) {} {}".format(name, val, hex(val), hex(b[0]), hex(b[1])))
 
         # write the register
         self.spi.writebytes([reg0 | reg_wr, b[0]])
         self.spi.writebytes([reg1 | reg_wr, b[1]])
 
         # wait a sec for it to apply
-        time.sleep(read_back_wait)
-
-        # read back the registers
-        read = self.read_reg(reg0)
-        log.debug("{}0: {} {}".format(name, hex(read[0]), read[0]))
-        read = self.read_reg(reg1)
-        log.debug("{}1: {} {}".format(name, hex(read[0]), read[0]))
-
+        sleep(read_back_wait)
 
     def set_conf0(self, val):
         self.spi.writebytes([conf0 | reg_wr, val])
 
-
     def set_conf1(self, val):
         self.spi.writebytes([conf1 | reg_wr, val])
-
 
     def set_conf2(self, val):
         self.spi.writebytes([conf2 | reg_wr, val])
 
-
     def set_conf3(self, val):
         self.spi.writebytes([conf3 | reg_wr, val])
-
 
     def set_conf4(self, val):
         self.spi.writebytes([conf4 | reg_wr, val])
 
-
     def set_vhi(self, val):
         self.spi.writebytes([vhi | reg_wr, val])
-
 
     def set_vlo(self, val):
         self.spi.writebytes([vlo | reg_wr, val])
 
-
     def set_ncp(self, val):
         self.spi.writebytes([ncp | reg_wr, val])
 
-
-    # write_reg_raw allows write the raw register address(not including the 
-    # write flag) with the provided value
-    def write_reg_raw(self, reg, val):
+    def _write_reg_raw(self, reg: int, val: bytes):
         self.spi.writebytes([reg, val])
 
-
     def set_integration(self, intr_seconds):
-        log.info("setting integration time to {} seconds".format(intr_seconds))
+
         # from the specified number of integration, get the number of integration
         # refclks, rounding down the float
         intr_refclks = int(intr_seconds / refclk_cycle)
 
         # validate the integration time
         if intr_refclks < 513:
-            log.warning("specified less that minimum integration of 513 REFCLKs, setting to 513".format(intr_refclks))
             intr_refclks = 513
 
         # calculate the number of refclks in a frame by adding the number of refclks
@@ -230,8 +198,8 @@ class pirt1280:
         # bit of margin
         frame_refclks = int(intr_refclks + (readout_refclks * readout_margin))
 
-        # convert the frame time and integration time refclks value to little-endian 
-        # bytes, so the first byte is the lowest byte, which is how it should be written 
+        # convert the frame time and integration time refclks value to little-endian
+        # bytes, so the first byte is the lowest byte, which is how it should be written
         # to the register
 
         # frb == frame refclk bytes
@@ -239,16 +207,6 @@ class pirt1280:
 
         # irb == integration reflcks bytes
         irb = intr_refclks.to_bytes(4, 'little')
-
-        log.debug("READOUT TIME(s): {}".format(readout_refclks * refclk_cycle))
-        log.debug("INTEGRATION TIME(s): {}".format(intr_seconds))
-        log.debug("FRAME TIME(s): {}".format(frame_refclks * refclk_cycle))
-        log.debug("INTEGRATION REFCLKS: {}".format(intr_refclks))
-        log.debug("FRAME REFCLKS: {}".format(frame_refclks))
-        log.debug("INTEGRATION REFCLKS(hex): {}".format(hex(intr_refclks)))
-        log.debug("FRAME REFCLKS(hex): {}".format(hex(frame_refclks)))
-        log.debug("INTEGRATION BYTES: {}".format(hex(irb[0]), hex(irb[1]), hex(irb[2]), hex(irb[3])))
-        log.debug("FRAME BYTES: {}".format(hex(frb[0]), hex(frb[1]), hex(frb[2]), hex(frb[3])))
 
         # write the frame time register
         self.spi.writebytes([ft0 | reg_wr, frb[0]])
@@ -263,49 +221,32 @@ class pirt1280:
         self.spi.writebytes([it3 | reg_wr, irb[3]])
 
         # wait a sec for it to apply
-        time.sleep(read_back_wait)
+        sleep(read_back_wait)
 
-        # read back 
-        read = self.read_reg(ft0)
-        log.debug("ft0: {}".format(hex(read[0]), read[0]))
-        read = self.read_reg(ft1)
-        log.debug("ft1: {}".format(hex(read[0]), read[0]))
-        read = self.read_reg(ft2)
-        log.debug("ft2: {}".format(hex(read[0]), read[0]))
-        read = self.read_reg(ft3)
-        log.debug("ft3: {}".format(hex(read[0]), read[0]))
-
-        # read back 
-        read = self.read_reg(it0)
-        log.debug("it0: {}".format(hex(read[0]), read[0]))
-        read = self.read_reg(it1)
-        log.debug("it1: {}".format(hex(read[0]), read[0]))
-        read = self.read_reg(it2)
-        log.debug("it2: {}".format(hex(read[0]), read[0]))
-        read = self.read_reg(it3)
-        log.debug("it3: {}".format(hex(read[0]), read[0]))
-
-
-    def read_reg(self, reg):
+    def _read_reg(self, reg: int) -> bytes:
         self.spi.writebytes([reg])
         return self.spi.readbytes(1)
 
-def main():
-    p = pirt1280()
+    def capture(self, intr: float = 0.0) -> bytearray:
 
-    # set debug logging
-    if args.v:
-        log.setLevel(logging.DEBUG)
+        if intr != 0.0:
+            # set the integration for this frame
+            self.set_integration(intr)
 
-    # act on args
-    if args.enable:
-        p.enable()
-    elif args.disable:
-        p.disable()
-    elif args.integration:
-        p.set_integration(args.integration)
-    else:
-        arg.print_help()
-        
-if __name__ == "__main__":
-    main()
+        # wait a moment for settings to apply
+        sleep(0.05)
+
+        # open the prucam char device
+        fd = os.open(self.PRUCAM_PATH, os.O_RDWR)
+        fio = io.FileIO(fd, closefd=False)
+
+        # allocate buffer to read frame into
+        imgbuf = bytearray(self.PIXEL_BYTES)
+
+        # read from prucam into buffer
+        fio.readinto(imgbuf)
+
+        # close the char device
+        os.close(fd)
+
+        return imgbuf
