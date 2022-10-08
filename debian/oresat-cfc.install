@@ -1,2 +1,0 @@
-oresat-cfcd.service /lib/systemd/system/
-org.OreSat.CFC.conf /usr/share/dbus-1/system.d/
