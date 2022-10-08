@@ -1,6 +1,11 @@
-# oresat-cfc-software
+# OreSat CFC Software
 
-[![License](https://img.shields.io/github/license/oresat/oresat-cfc-software)](./LICENSE)
-[![Issues](https://img.shields.io/github/issues/oresat/oresat-cfc-software)](https://github.com/oresat/oresat-cfc-software/issues)
+CFC (Cirrrus Flux Camera) software
 
-Cirrrus Flux Camera software repository
+## How To
+
+- Install the prucam-pirt1280 driver: see [oresat-prucam-pirt1280]
+- Install dependencies: `$ pip install -r requirements.txt`
+- Run: `$ python -m oresat_cfc`
+
+[oresat-prucam-pirt1280]:https://github.com/oresat/oresat-prucam-pirt1280
