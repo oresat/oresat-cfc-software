@@ -4,6 +4,8 @@ from argparse import ArgumentParser
 from olaf import app_args_parser, parse_app_args, App
 
 from .cfc_resource import CFCResource
+from .tec_resource import TECResource
+from .tec_watchdog_resource import TECWatchdogResource
 
 
 def main():
@@ -15,6 +17,8 @@ def main():
     app = App(eds, args.bus, args.node_id, args.mock_hw)
 
     app.add_resource(CFCResource)
+    app.add_resource(TECResource)
+    app.add_resource(TECWatchdogResource)
 
     app.run()
 

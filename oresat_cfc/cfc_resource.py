@@ -3,8 +3,6 @@ from enum import IntEnum
 from olaf import Resource, logger
 
 from .pirt1280 import PIRT1280
-from .tec import TEC
-from .tec_controller import TecController
 
 
 class State(IntEnum):
@@ -26,16 +24,10 @@ class CFCResource(Resource):
         self._cam = PIRT1280()
         self._cam.set_integration(0.05)
 
-        self._tec = TEC()
-        self._tec_ctrl = TecController(self._tec)
-
     def on_start(self):
 
         logger.info('enabling camera')
         self._cam.enable()
-
-        logger.info('startng TEC watchdog')
-        self._tec_ctrl.enable()
 
     def on_loop(self):
 
@@ -45,6 +37,3 @@ class CFCResource(Resource):
 
         logger.info('disabling camera')
         self._cam.disable()
-
-        logger.info('stopping TEC watchdog')
-        self._tec_ctrl.disable()

@@ -9,7 +9,7 @@ from .tec_controller import WATCHDOG_FILE
 TIMEOUT_S = 5
 
 
-class CFCWatchdogResource(Resource):
+class TECWatchdogResource(Resource):
     '''
     Used to make sure the TEC controller is not hung by checkinmg the timestamp it updates
     frequently
@@ -19,7 +19,7 @@ class CFCWatchdogResource(Resource):
         super().__init__(*args, **kwargs)
 
         self._tect = TEC()
-        self.delay = 5
+        self.delay = TIMEOUT_S
 
     def on_loop(self):
         '''on an interval, check the timestamp and disable the GPIO on any error'''

@@ -14,9 +14,6 @@ class TecController:
 
         self._tec = tec
 
-        # enable the timer thread that actually executes the PID loop
-        self._timer = Timer(self._timer_run, 0.25)
-
         self._pid = PID(0.5, 0.0, 0.1)
         self._pid.setpoint = 10
 
@@ -48,7 +45,7 @@ class TecController:
         # return the average
         return sum(self._samples) / len(self._samples)
 
-    def _timer_run(self):
+    def loop(self):
 
         with open(WATCHDOG_FILE, 'w') as f:
             f.write(str(int(datetime.now().timestamp())))
@@ -81,16 +78,6 @@ class TecController:
         else:
             logger.debug('disabling TEC')
             self._tec.disable()
-
-    def enable_controller(self):
-        '''Enable TEC controller'''
-
-        self._timer.start()
-
-    def disable_controller(self):
-        '''Disable TEC controller'''
-
-        self.timer.cancel()
 
     @property
     def is_saturated(self):
