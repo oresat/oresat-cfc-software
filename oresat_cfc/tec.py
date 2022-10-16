@@ -30,14 +30,6 @@ def res_to_temp_celcius(res: int) -> float:
 
 class TEC:
 
-    SATURATION_DIFF = 6
-    '''
-    the difference between the current temp and the setpoint at which the TEC is
-    considered saturated and therefore should be disabled. Note that it would
-    only be considered saturated after it first crossed below the saturation
-    and then came above it as the TEC because saturated with heat
-    '''
-
     R1 = 10000
     '''resistance of the upper resistor in the divider'''
 
@@ -50,12 +42,7 @@ class TEC:
 
     def __init__(self):
 
-        # flags whether the TEC temperature is saturated. This is defined by the
-        # TEC first going below zero after being enabled, and then going above zero
-        # again when the TEC cannot maintain the temperature differential
-        self._saturated = False
-
-        self._state = 0  # is the TEC is currently on/off(while controller is enabled)
+        self._tec_on = False  # is the TEC is currently on/off
 
         # setup GPIO and set to default state
         gpio.setup(self.GPIO_PIN, gpio.OUT)
@@ -65,13 +52,13 @@ class TEC:
         '''Disable the TEC'''
 
         gpio.set(self.GPIO_PIN, 0)
-        self._state = 0
+        self._tec_on = False
 
     def enable(self):
         '''Enable the TEC'''
 
         gpio.set(self.GPIO_PIN, 1)
-        self._state = 1
+        self._tec_on = True
 
     def _get_temp(self) -> float:
         '''Get the raw temperature of the TEC'''

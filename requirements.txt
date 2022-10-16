@@ -1,6 +1,7 @@
 olaf
 numpy
 opencv-python
+simple-pid
 spidev
 gpio
 flake8
