@@ -23,7 +23,7 @@ $ sudo ip link set vcan0 up
 Run the CFC app
 
 ```bash
-$ python3 -m oresat_c3
+$ python3 -m oresat_cfc
 ```
 
 Can select the CAN bus to use (`vcan0`, `can0`, etc) with the `-b BUS` arg.
