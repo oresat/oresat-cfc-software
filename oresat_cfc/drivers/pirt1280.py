@@ -7,6 +7,7 @@ from enum import IntEnum
 
 import spidev
 import gpio
+import numpy as np
 
 # fix gpio enabling all logging for other modules
 logging.getLogger().removeHandler(logging.getLogger().handlers[0])
@@ -210,7 +211,7 @@ class PIRT1280:
     def capture(self, intr: float = 0.0) -> bytes:
 
         if self.mock:
-            return bytes([random.randint(0, 256) for i in self.PIXEL_BYTES])
+            return bytes([random.randint(0, 255) for i in range(self.PIXEL_BYTES)])
 
         if intr != 0.0:
             # set the integration for this frame
@@ -233,3 +234,9 @@ class PIRT1280:
         os.close(fd)
 
         return imgbuf
+
+    def capture_as_np_array(self, intr: float = 0.0) -> np.ndarray:
+
+        raw = self.capture(intr)
+        data = np.frombuffer(raw, dtype=np.uint16).reshape(self.ROWS, self.COLS)
+        return data

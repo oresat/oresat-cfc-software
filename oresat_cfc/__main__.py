@@ -1,11 +1,16 @@
 import os
 
-from olaf import app, olaf_setup, olaf_run
+from olaf import app, rest_api, olaf_setup, olaf_run, render_olaf_template
 
 from .drivers.tec import TEC
 from .drivers.pirt1280 import PIRT1280
 from .resources.cfc import CFCResource
 from .resources.tec import TECResource
+
+
+@rest_api.app.route('/cfc')
+def camera_template():
+    return render_olaf_template('cfc.html', name='CFC')
 
 
 def main():
@@ -21,6 +26,8 @@ def main():
 
     app.add_resource(CFCResource(pirt1280))
     app.add_resource(TECResource(tec))
+
+    rest_api.add_template(f'{path}/templates/cfc.html')
 
     olaf_run()
 

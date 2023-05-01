@@ -3,6 +3,7 @@
 import os
 import sys
 import gzip
+
 import numpy as np
 import cv2
 
@@ -17,7 +18,6 @@ capts = os.listdir(capt_dir)
 for capt in capts:
     # only try to convert gzip'd files
     if not capt.endswith(".gz"):
-    #if not capt.endswith(".bin"):
         continue
 
     # create the full file path
@@ -26,7 +26,6 @@ for capt in capts:
 
     # open the file
     with gzip.open(path, 'rb') as f:
-    #with open(path, 'rb') as f:S
         print(path)
         # read the decompressed bytes
         buf = f.read()
@@ -46,12 +45,11 @@ for capt in capts:
 
         # try to encode the image as png
         ok, encoded = cv2.imencode(".png", img, params=[cv2.CV_16U])
-        if not(ok):
+        if not ok:
             raise Exception("error encoding image")
 
         # write the file as a png
         png_path = path.replace(".gz", ".png")
-        #png_path = path.replace(".bin", ".png")
+        # png_path = path.replace(".bin", ".png")
         with open(png_path, 'wb') as png:
             png.write(encoded.tobytes())
-

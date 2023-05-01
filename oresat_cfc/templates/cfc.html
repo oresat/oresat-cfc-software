@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <style>
+    #image {
+      width: 50%;
+    }
+  </style>
+  <p>
+    <b>TEC:</b>
+    <span id=tecEnable>DISABLED</span> /
+    <span id=tecSaturated>NOT_SATURATED</span> /
+    <span id=tecTemperature>0</span>°C
+  <p>
+  <!--the '//:0' is a basically the way to make any empty img-->
+  <img id='image' src='//:0' alt='capture'/>
+  <script>
+    async function takeCapture() {
+      let obj = await readValue('0x7000', '0x1');
+      document.getElementById('image').src = 'data:image/jpg;base64, ' + obj.value;
+
+      obj = await readValue('0x6000', null);
+
+      if (obj.subindexes[1].value) {
+        document.getElementById('tecEnable').innerHTML = 'ENABLED';
+      } else {
+        document.getElementById('tecEnable').innerHTML = 'DISABLED';
+      }
+
+      if (obj.subindexes[2].value) {
+        document.getElementById('tecSaturated').innerHTML = 'SATURATED';
+      } else {
+        document.getElementById('tecSaturated').innerHTML = 'NOT_SATURATED';
+      }
+      
+      document.getElementById('tecTemperature').innerHTML = obj.subindexes[3].value;
+    }
+
+    takeCapture();
+    const interval = setInterval(function() {
+      takeCapture();
+    }, 5000);
+  </script>
+{% endblock %}

@@ -1,5 +1,7 @@
 flake8
 gpio
+numpy
+opencv-python-headless
 oresat-olaf
 simple-pid
 spidev
