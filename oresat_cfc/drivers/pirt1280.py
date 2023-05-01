@@ -71,7 +71,9 @@ class PIRT1280:
     PIXEL_BYTES = COLS * ROWS * 2
     PRUCAM_PATH = '/dev/prucam'
 
-    def __init__(self):
+    def __init__(self, mock: bool = False):
+
+        self.mock = mock
 
         # init SPI
         self.spi = spidev.SpiDev()

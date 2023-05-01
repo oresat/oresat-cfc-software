@@ -1,4 +1,4 @@
-import m as m
+import math as m
 
 import gpio
 
@@ -40,7 +40,9 @@ class TEC:
 
     ADC_PATH = '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'
 
-    def __init__(self):
+    def __init__(self, mock: bool = False):
+
+        self.mock = mock
 
         self._tec_on = False  # is the TEC is currently on/off
 

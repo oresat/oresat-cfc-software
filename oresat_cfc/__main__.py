@@ -1,26 +1,28 @@
-from os.path import dirname, abspath
-from argparse import ArgumentParser
+import os
 
-from olaf import app_args_parser, parse_app_args, App
+from olaf import app, olaf_setup, olaf_run
 
-from .cfc_resource import CFCResource
-from .tec_resource import TECResource
-from .tec_watchdog_resource import TECWatchdogResource
+from .drivers.tec import TEC
+from .drivers.pirt1280 import PIRT1280
+from .resources.cfc import CFCResource
+from .resources.tec import TECResource
 
 
 def main():
-    parser = ArgumentParser(parents=[app_args_parser])
-    args = parser.parse_args()
-    parse_app_args(args)
+    path = os.path.dirname(os.path.abspath(__file__))
 
-    eds = f'{dirname(abspath(__file__))}/data/oresat_cfc.dcf'
-    app = App(eds, args.bus, args.node_id, args.mock_hw)
+    args = olaf_setup(f'{path}/data/oresat_cfc.dcf')
+    mock_args = [i.lower() for i in args.mock_hw]
+    mock_camera = 'camera' in mock_args or 'all' in mock_args
+    mock_tec = 'tec' in mock_args or 'all' in mock_args
 
-    app.add_resource(CFCResource)
-    app.add_resource(TECResource)
-    app.add_resource(TECWatchdogResource)
+    pirt1280 = PIRT1280(mock_camera)
+    tec = TEC(mock_tec)
 
-    app.run()
+    app.add_resource(CFCResource(pirt1280))
+    app.add_resource(TECResource(tec))
+
+    olaf_run()
 
 
 if __name__ == '__main__':
