@@ -1,4 +1,5 @@
 import math as m
+import random
 
 import gpio
 
@@ -47,23 +48,29 @@ class TEC:
         self._tec_on = False  # is the TEC is currently on/off
 
         # setup GPIO and set to default state
-        gpio.setup(self.GPIO_PIN, gpio.OUT)
+        if not self.mock:
+            gpio.setup(self.GPIO_PIN, gpio.OUT)
         self.disable()
 
     def disable(self):
         '''Disable the TEC'''
 
-        gpio.set(self.GPIO_PIN, 0)
+        if not self.mock:
+            gpio.set(self.GPIO_PIN, 0)
         self._tec_on = False
 
     def enable(self):
         '''Enable the TEC'''
 
-        gpio.set(self.GPIO_PIN, 1)
+        if not self.mock:
+            gpio.set(self.GPIO_PIN, 1)
         self._tec_on = True
 
     def _get_temp(self) -> float:
         '''Get the raw temperature of the TEC'''
+
+        if self.mock:
+            return random.uniform(-10, 0)
 
         with open(self.ADC_PATH, 'r') as f:
             val = f.read()

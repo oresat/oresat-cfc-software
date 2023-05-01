@@ -1,43 +1,53 @@
 import io
 import os
+import random
+import logging
 from time import sleep
+from enum import IntEnum
 
 import spidev
 import gpio
+
+# fix gpio enabling all logging for other modules
+logging.getLogger().removeHandler(logging.getLogger().handlers[0])
 
 sensor_enable_gpio = 86
 
 # SPI 100KHz
 spi_hz = 100000
 
-# register addresses
-com = 0x01
-coff0 = 0x02
-coff1 = 0x03
-cws0 = 0x04
-cws1 = 0x05
-hb0 = 0x06
-hb1 = 0x07
-roff0 = 0x08
-roff1 = 0x09
-rws0 = 0x0a
-rws1 = 0x0b
-it0 = 0x0e
-it1 = 0x0f
-it2 = 0x10
-it3 = 0x11
-ft0 = 0x12
-ft1 = 0x13
-ft2 = 0x14
-ft3 = 0x15
-vhi = 0x1a
-vlo = 0x1c
-conf0 = 0x26
-conf1 = 0x27
-conf2 = 0x28
-conf3 = 0x29
-ncp = 0x2e
-conf4 = 0x31
+
+class Register(IntEnum):
+    '''PIRT1280 register addresses'''
+
+    COM = 0x01
+    COFF0 = 0x02
+    COFF1 = 0x03
+    CWS0 = 0x04
+    cWS1 = 0x05
+    HB0 = 0x06
+    HB1 = 0x07
+    ROFF0 = 0x08
+    ROFF1 = 0x09
+    RWS0 = 0x0a
+    RWS1 = 0x0b
+    IT0 = 0x0e
+    IT1 = 0x0f
+    IT2 = 0x10
+    IT3 = 0x11
+    FT0 = 0x12
+    FT1 = 0x13
+    FT2 = 0x14
+    FT3 = 0x15
+    VHI = 0x1a
+    VLO = 0x1c
+    CONF0 = 0x26
+    CONF1 = 0x27
+    CONF2 = 0x28
+    CONF3 = 0x29
+    NCP = 0x2e
+    CONF4 = 0x31
+
 
 # OR with address to write
 reg_wr = 0x40
@@ -58,8 +68,8 @@ rows = 1024
 pix_clks_per_refclk = 4  # 4 64MHz clocks per 16MHZ refclk
 
 # calculate the readout time
-readout_refclks = (((default_cws + dummy_pixels + sync_pixels) *
-                    bytes_per_pixel) * rows) / pix_clks_per_refclk
+readout_refclks = (((default_cws + dummy_pixels + sync_pixels) * bytes_per_pixel) * rows) \
+    / pix_clks_per_refclk
 readout_margin = 1.1  # scalar to increase readout time for safety
 
 
@@ -73,76 +83,61 @@ class PIRT1280:
 
     def __init__(self, mock: bool = False):
 
-        self.mock = mock
+        self.mock = mock  # TODO
 
         # init SPI
-        self.spi = spidev.SpiDev()
-        self.spi.open(1, 1)  # /dev/spidev1.1
-        self.spi.max_speed_hz = spi_hz
+        if not mock:
+            self.spi = spidev.SpiDev()
+            self.spi.open(1, 1)  # /dev/spidev1.1
+            self.spi.max_speed_hz = spi_hz
 
     def __del__(self):
+
         self.disable()
 
     def enable(self):
 
         # set the enable GPIO high
-        gpio.setup(sensor_enable_gpio, gpio.OUT)
-        gpio.set(sensor_enable_gpio, 1)
+        if not self.mock:
+            gpio.setup(sensor_enable_gpio, gpio.OUT)
+            gpio.set(sensor_enable_gpio, 1)
 
         sleep(read_back_wait)
 
         # TODO set ROFF register to 8 to start at row 8
         # TODO I might be able to turn down CWS or use defauth of 1279
 
-        self.set_roff(8)
-        self.set_coff(8)
-        self.set_hb(32)
+        self.set_16b_reg(8, Register.ROFF0, Register.ROFF1)
+        self.set_16b_reg(8, Register.COFF0, Register.COFF1)
+        self.set_16b_reg(32, Register.HB0, Register.HB1)
         self.set_single_lane()
         self.set_integration(0.001)
 
     def disable(self):
 
-        gpio.setup(sensor_enable_gpio, gpio.OUT)
-        gpio.set(sensor_enable_gpio, 0)
+        if not self.mock:
+            gpio.setup(sensor_enable_gpio, gpio.OUT)
+            gpio.set(sensor_enable_gpio, 0)
 
     def set_single_lane(self):
+
+        if self.mock:
+            return
+
         # read current CONF1 value
-        read = self._read_reg(conf1)
+        read = self._read_reg(Register.CONF1)
 
         # clear bits 6 & 7 of CONF1 and write it back
         new = read[0] & 0x3F
-        self.set_conf1(new)
+        self.set_8b_reg(new, Register.CONF1)
 
         # wait a sec for it to apply
         sleep(read_back_wait)
 
         # read back CONF1
-        read = self._read_reg(conf1)
+        read = self._read_reg(Register.CONF1)
 
-    def set_com(self, val):
-        self.spi.writebytes([com | reg_wr, val])
-
-    def set_coff(self, coff):
-        '''set_coff sets the column offset registers'''
-        self.set_16b_reg('COFF', coff, coff0, coff1)
-
-    def set_cws(self, cws):
-        '''set_cws sets the column window size'''
-        self.set_16b_reg('CWS', cws, cws0, cws1)
-
-    def set_hb(self, hb):
-        '''set_hb sets the horizontal blanking registers'''
-        self.set_16b_reg('HB', hb, hb0, hb1)
-
-    def set_roff(self, roff):
-        '''set_roff sets the row offset register'''
-        self.set_16b_reg('ROFF', roff, roff0, roff1)
-
-    def set_rws(self, rws):
-        '''set_rws sets the row window size register'''
-        self.set_16b_reg('RWS', rws, rws0, rws1)
-
-    def set_16b_reg(self, name, val, reg0, reg1):
+    def set_16b_reg(self, val: int, reg0: Register, reg1: Register):
         '''
         set_16b_reg writes the passed value to the passed registers as a 16 bit
         little-endian integer.
@@ -152,38 +147,17 @@ class PIRT1280:
         b = val.to_bytes(2, 'little')
 
         # write the register
-        self.spi.writebytes([reg0 | reg_wr, b[0]])
-        self.spi.writebytes([reg1 | reg_wr, b[1]])
+        if not self.mock:
+            self.spi.writebytes([reg0.value | reg_wr, b[0]])
+            self.spi.writebytes([reg1.value | reg_wr, b[1]])
 
         # wait a sec for it to apply
         sleep(read_back_wait)
 
-    def set_conf0(self, val):
-        self.spi.writebytes([conf0 | reg_wr, val])
+    def set_8b_reg(self, val: int, reg: Register):
 
-    def set_conf1(self, val):
-        self.spi.writebytes([conf1 | reg_wr, val])
-
-    def set_conf2(self, val):
-        self.spi.writebytes([conf2 | reg_wr, val])
-
-    def set_conf3(self, val):
-        self.spi.writebytes([conf3 | reg_wr, val])
-
-    def set_conf4(self, val):
-        self.spi.writebytes([conf4 | reg_wr, val])
-
-    def set_vhi(self, val):
-        self.spi.writebytes([vhi | reg_wr, val])
-
-    def set_vlo(self, val):
-        self.spi.writebytes([vlo | reg_wr, val])
-
-    def set_ncp(self, val):
-        self.spi.writebytes([ncp | reg_wr, val])
-
-    def _write_reg_raw(self, reg: int, val: bytes):
-        self.spi.writebytes([reg, val])
+        if not self.mock:
+            self.spi.writebytes([reg.value | reg_wr, val.to_bytes(1, 'little')])
 
     def set_integration(self, intr_seconds):
 
@@ -211,25 +185,32 @@ class PIRT1280:
         irb = intr_refclks.to_bytes(4, 'little')
 
         # write the frame time register
-        self.spi.writebytes([ft0 | reg_wr, frb[0]])
-        self.spi.writebytes([ft1 | reg_wr, frb[1]])
-        self.spi.writebytes([ft2 | reg_wr, frb[2]])
-        self.spi.writebytes([ft3 | reg_wr, frb[3]])
+        self.set_8b_reg(frb[0], Register.FT0)
+        self.set_8b_reg(frb[1], Register.FT0)
+        self.set_8b_reg(frb[2], Register.FT0)
+        self.set_8b_reg(frb[3], Register.FT0)
 
         # write the integration time register
-        self.spi.writebytes([it0 | reg_wr, irb[0]])
-        self.spi.writebytes([it1 | reg_wr, irb[1]])
-        self.spi.writebytes([it2 | reg_wr, irb[2]])
-        self.spi.writebytes([it3 | reg_wr, irb[3]])
+        self.set_8b_reg(irb[0], Register.IT0)
+        self.set_8b_reg(irb[1], Register.IT1)
+        self.set_8b_reg(irb[2], Register.IT2)
+        self.set_8b_reg(irb[3], Register.IT3)
 
         # wait a sec for it to apply
         sleep(read_back_wait)
 
     def _read_reg(self, reg: int) -> bytes:
+
+        if self.mock:
+            return b'\x00'
+
         self.spi.writebytes([reg])
         return self.spi.readbytes(1)
 
-    def capture(self, intr: float = 0.0) -> bytearray:
+    def capture(self, intr: float = 0.0) -> bytes:
+
+        if self.mock:
+            return bytes([random.randint(0, 256) for i in self.PIXEL_BYTES])
 
         if intr != 0.0:
             # set the integration for this frame
@@ -243,7 +224,7 @@ class PIRT1280:
         fio = io.FileIO(fd, closefd=False)
 
         # allocate buffer to read frame into
-        imgbuf = bytearray(self.PIXEL_BYTES)
+        imgbuf = bytes(self.PIXEL_BYTES)
 
         # read from prucam into buffer
         fio.readinto(imgbuf)
