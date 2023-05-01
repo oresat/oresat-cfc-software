@@ -17,28 +17,24 @@ class TECResource(Resource):
         self._tec = tec
         self._tec_ctrl = TecController(self._tec)
 
-        self.tec_timer_loop = TimerLoop('tec', self._tec_loop, 1000)
+        self.tec_timer_loop = TimerLoop('tec', self._tec_loop, 500)
         self.watchdog_timer_loop = TimerLoop('tec watchdog', self._watchdog_loop, 1000)
 
     def on_start(self):
 
-        logger.info('startng TEC watchdog')
-        self._tec_ctrl.enable()
-
         self.tec_timer_loop.start()
+        logger.info('startng TEC watchdog')
         self.watchdog_timer_loop.start()
 
     def on_end(self):
 
         self.tec_timer_loop.stop()
-        self.watchdog_timer_loop.stop()
-
         logger.info('stopping TEC watchdog')
-        self._tec_ctrl.disable()
+        self.watchdog_timer_loop.stop()
 
     def _tec_loop(self) -> True:
 
-        self._tec.loop()
+        self._tec_ctrl.loop()
 
         return True
 

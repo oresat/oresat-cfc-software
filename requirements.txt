@@ -1,7 +1,5 @@
-olaf
-numpy
-opencv-python
+flake8
+gpio
+oresat-olaf
 simple-pid
 spidev
-gpio
-flake8

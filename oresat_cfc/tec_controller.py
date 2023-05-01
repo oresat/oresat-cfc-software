@@ -3,19 +3,27 @@ from datetime import datetime
 from olaf import logger
 from simple_pid import PID
 
-from .tec import TEC
+from .drivers.tec import TEC
 
 WATCHDOG_FILE = '/tmp/tec.watchdog'
 
 
 class TecController:
 
+    SATURATION_DIFF = 6
+    '''
+    the difference between the current temp and the setpoint at which the TEC is
+    considered saturated and therefore should be disabled. Note that it would
+    only be considered saturated after it first crossed below the saturation
+    and then came above it as the TEC because saturated with heat.
+    '''
+
     def __init__(self, tec: TEC):
 
         self._tec = tec
 
-        self._pid = PID(0.5, 0.0, 0.1)
-        self._pid.setpoint = 10
+        self.pid = PID(0.5, 0.0, 0.1)
+        self.pid.setpoint = 10
 
         # flags whether the TEC temperature is saturated. This is defined by the
         # TEC first going below zero after being enabled, and then going above zero
@@ -24,6 +32,8 @@ class TecController:
 
         self._saturation_time = None
         self._past_saturation_pt_since_enable = False
+        self._samples = []
+        self._num_samples = 20
 
     def __del__(self):
 
@@ -58,7 +68,7 @@ class TecController:
         avg = self._get_moving_average(current_temp)
 
         # calculate the saturation point based on the setpoint
-        saturation_pt = self._pid.setpoint + self.SATURATION_DIFF
+        saturation_pt = self.pid.setpoint + self.SATURATION_DIFF
 
         # if the average goes below the saturation point since enabled, flag it
         if avg <= saturation_pt:
