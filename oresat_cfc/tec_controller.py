@@ -5,8 +5,6 @@ from simple_pid import PID
 
 from .drivers.tec import TEC
 
-WATCHDOG_FILE = '/tmp/tec.watchdog'
-
 
 class TecController:
 
@@ -57,9 +55,6 @@ class TecController:
 
     def loop(self):
 
-        with open(WATCHDOG_FILE, 'w') as f:
-            f.write(str(int(datetime.now().timestamp())))
-
         # sample the temp and get the PID correction
         current_temp = self._tec.temperature
         diff = self.pid(current_temp)
@@ -94,9 +89,3 @@ class TecController:
         '''bool: Check if the TEC is saturated.'''
 
         return self._saturated
-
-    @property
-    def controller_enabled(self):
-        '''bool: Check if the TEC controller is running.'''
-
-        return self._timer.is_alive()

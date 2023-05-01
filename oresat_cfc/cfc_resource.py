@@ -4,7 +4,9 @@ import cv2
 import numpy as np
 from olaf import Resource, logger, TimerLoop, new_oresat_file
 
-from ..drivers.pirt1280 import PIRT1280
+from .drivers.pirt1280 import PIRT1280
+from .drivers.tec import TEC
+from .tec_controller import TecController
 
 
 class State(IntEnum):
@@ -17,7 +19,7 @@ class State(IntEnum):
 
 class CFCResource(Resource):
 
-    def __init__(self, camera: PIRT1280):
+    def __init__(self, camera: PIRT1280, tec: TEC):
         super().__init__()
 
         self._state = State.STANDBY
@@ -25,7 +27,12 @@ class CFCResource(Resource):
         self._cam = camera
         self._cam.set_integration(0.05)
 
-        self.timer_loop = TimerLoop('cfc resource', self._loop, 1000)
+        self._tec = tec
+        self._tec_ctrl = TecController(self._tec)
+
+        self.timer_loop = TimerLoop('cfc resource', self._state_loop, 1000)
+        self.tec_timer_loop = TimerLoop('tec', self._tec_loop, 500,
+                                        exc_func=self.on_tec_loop_error)
         self.test_camera_index = 0x7000
 
     def on_start(self):
@@ -40,7 +47,19 @@ class CFCResource(Resource):
         logger.info('disabling camera')
         self._cam.disable()
 
-    def _loop(self) -> bool:
+        self.tec_timer_loop.stop()
+
+        logger.info('disabling TEC')
+        self._tec.disable()
+
+    def on_tec_loop_error(self, error: Exception):
+        '''_tec_loop() raised an unexpected error'''
+
+        logger.critical(f'disabling TEC due to unexpected error: {error}')
+        self._tec.disable()
+
+    def _state_loop(self) -> bool:
+        '''Run the state machine loop'''
 
         if self._state == State.CAPTURE:
             self._capture(save=True)
@@ -48,6 +67,7 @@ class CFCResource(Resource):
         return True
 
     def _capture(self, ext: str = '.bmp', save: bool = False) -> bytes:
+        '''Capture an image to send to UI (heavy manipulated image for UI display)'''
 
         data = self._cam.capture_as_np_array()
 
@@ -78,6 +98,14 @@ class CFCResource(Resource):
         return bytes(encoded)
 
     def on_test_camera_read(self, index: int, subindex: int):
+        '''SDO read on the test camera obj'''
 
         if index == self.test_camera_index and subindex == 0x1:
             return self._capture(ext='.jpg')
+
+    def _tec_loop(self) -> True:
+        '''Run the TEC loop'''
+
+        self._tec_ctrl.loop()
+
+        return True

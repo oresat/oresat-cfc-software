@@ -4,8 +4,7 @@ from olaf import app, rest_api, olaf_setup, olaf_run, render_olaf_template
 
 from .drivers.tec import TEC
 from .drivers.pirt1280 import PIRT1280
-from .resources.cfc import CFCResource
-from .resources.tec import TECResource
+from .cfc_resource import CFCResource
 
 
 @rest_api.app.route('/cfc')
@@ -24,8 +23,7 @@ def main():
     pirt1280 = PIRT1280(mock_camera)
     tec = TEC(mock_tec)
 
-    app.add_resource(CFCResource(pirt1280))
-    app.add_resource(TECResource(tec))
+    app.add_resource(CFCResource(pirt1280, tec))
 
     rest_api.add_template(f'{path}/templates/cfc.html')
 
