@@ -1,7 +1,7 @@
 flake8
 gpio
 numpy
-opencv-python-headless
-oresat-olaf
+opencv-python-headless==4.6.0.66
+oresat-olaf>=2.1.1
 simple-pid
 spidev
