@@ -2,8 +2,8 @@ import os
 
 from olaf import app, rest_api, olaf_setup, olaf_run, render_olaf_template
 
-from .drivers.tec import TEC
-from .drivers.pirt1280 import PIRT1280
+from .drivers.tec import Tec
+from .drivers.pirt1280 import Pirt1280
 from .cfc_resource import CFCResource
 
 
@@ -20,8 +20,12 @@ def main():
     mock_camera = 'camera' in mock_args or 'all' in mock_args
     mock_tec = 'tec' in mock_args or 'all' in mock_args
 
-    pirt1280 = PIRT1280(mock_camera)
-    tec = TEC(mock_tec)
+    # TODO get these from OD
+    camera_enable_pin = 86
+    tec_enable_pin = 88
+
+    pirt1280 = Pirt1280(camera_enable_pin, mock_camera)
+    tec = Tec(tec_enable_pin, mock_tec)
 
     app.add_resource(CFCResource(pirt1280, tec))
 

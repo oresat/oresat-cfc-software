@@ -1,24 +1,19 @@
+'''
+The PIRT1280 camera driver.
+'''
+
 import io
 import os
 import random
-import logging
 from time import sleep
 from enum import IntEnum
 
-import spidev
 import gpio
 import numpy as np
-
-# fix gpio enabling all logging for other modules
-logging.getLogger().removeHandler(logging.getLogger().handlers[0])
-
-sensor_enable_gpio = 86
-
-# SPI 100KHz
-spi_hz = 100000
+from spidev import SpiDev
 
 
-class Register(IntEnum):
+class Pirt128Register(IntEnum):
     '''PIRT1280 register addresses'''
 
     COM = 0x01
@@ -50,121 +45,139 @@ class Register(IntEnum):
     CONF4 = 0x31
 
 
-# OR with address to write
-reg_wr = 0x40
-
-# number of seconds to wait after writing a register before reading it back
-read_back_wait = 0.1
-
-# refclk
-refclk = 16000000  # 16MHz
-refclk_cycle = 1 / refclk  # 16MHz period
-
-# row params
-default_cws = 1400
-dummy_pixels = 8
-sync_pixels = 2
-bytes_per_pixel = 2
-rows = 1024
-pix_clks_per_refclk = 4  # 4 64MHz clocks per 16MHZ refclk
-
-# calculate the readout time
-readout_refclks = (((default_cws + dummy_pixels + sync_pixels) * bytes_per_pixel) * rows) \
-    / pix_clks_per_refclk
-readout_margin = 1.1  # scalar to increase readout time for safety
-
-
-class PIRT1280:
+class Pirt1280:
     '''The PIRT1280 camera'''
 
     COLS = 1280
     ROWS = 1024
-    PIXEL_BYTES = COLS * ROWS * 2
+    BYTES_PER_PIXEL = 2
+    PIXEL_BYTES = COLS * ROWS * BYTES_PER_PIXEL
+
     PRUCAM_PATH = '/dev/prucam'
 
-    def __init__(self, mock: bool = False):
+    SPI_HZ = 100_000  # SPI 100KHz
 
-        self.mock = mock  # TODO
+    # OR with address to write
+    REG_WR = 0x40
+
+    # number of seconds to wait after writing a register before reading it back
+    READ_BACK_WAIT = 0.1
+
+    # refclk
+    REFCLK = 16_000_000  # 16MHz
+    REFCLK_CYCLE = 1 / REFCLK  # 16MHz period
+
+    # row params
+    DEFAULT_CWS = 1400
+    DUMMY_PIXELS = 8
+    SYNC_PIXELS = 2
+    PIX_CLKS_PER_REFCLK = 4  # 4 64MHz clocks per 16MHZ refclk
+
+    # calculate the readout time
+    READOUT_REFCLKS = (((DEFAULT_CWS + DUMMY_PIXELS + SYNC_PIXELS) * BYTES_PER_PIXEL) * ROWS) \
+        / PIX_CLKS_PER_REFCLK
+    READOUT_MARGIN = 1.1  # scalar to increase readout time for safety
+
+    def __init__(self, gpio_num: int, mock: bool = False):
+
+        self._gpio_num = gpio_num
+        self._mock = mock  # TODO
 
         # init SPI
         if not mock:
-            self.spi = spidev.SpiDev()
-            self.spi.open(1, 1)  # /dev/spidev1.1
-            self.spi.max_speed_hz = spi_hz
+            self._spi = SpiDev()
+            self._spi.open(1, 1)  # /dev/spidev1.1
+            self._spi.max_speed_hz = self.SPI_HZ
 
     def __del__(self):
 
         self.disable()
 
     def enable(self):
+        '''
+        Enable the PIRT1280 (power it on).
+        '''
 
         # set the enable GPIO high
-        if not self.mock:
-            gpio.setup(sensor_enable_gpio, gpio.OUT)
-            gpio.set(sensor_enable_gpio, 1)
+        if not self._mock:
+            gpio.setup(self._gpio_num, gpio.OUT)
+            gpio.set(self._gpio_num, 1)
 
-        sleep(read_back_wait)
+        sleep(self.READ_BACK_WAIT)
 
         # TODO set ROFF register to 8 to start at row 8
         # TODO I might be able to turn down CWS or use defauth of 1279
 
-        self.set_16b_reg(8, Register.ROFF0, Register.ROFF1)
-        self.set_16b_reg(8, Register.COFF0, Register.COFF1)
-        self.set_16b_reg(32, Register.HB0, Register.HB1)
+        self._set_16b_reg(8, Pirt128Register.ROFF0, Pirt128Register.ROFF1)
+        self._set_16b_reg(8, Pirt128Register.COFF0, Pirt128Register.COFF1)
+        self._set_16b_reg(32, Pirt128Register.HB0, Pirt128Register.HB1)
         self.set_single_lane()
         self.set_integration(0.001)
 
     def disable(self):
+        '''
+        Disable the PIRT1280 (power it off).
+        '''
 
-        if not self.mock:
-            gpio.setup(sensor_enable_gpio, gpio.OUT)
-            gpio.set(sensor_enable_gpio, 0)
+        if not self._mock:
+            gpio.setup(self._gpio_num, gpio.OUT)
+            gpio.set(self._gpio_num, 0)
 
     def set_single_lane(self):
 
-        if self.mock:
+        if self._mock:
             return
 
         # read current CONF1 value
-        read = self._read_reg(Register.CONF1)
+        read = self._read_reg(Pirt128Register.CONF1)
 
         # clear bits 6 & 7 of CONF1 and write it back
         new = read[0] & 0x3F
-        self.set_8b_reg(new, Register.CONF1)
+        self._set_8b_reg(new, Pirt128Register.CONF1)
 
         # wait a sec for it to apply
-        sleep(read_back_wait)
+        sleep(self.READ_BACK_WAIT)
 
         # read back CONF1
-        read = self._read_reg(Register.CONF1)
+        read = self._read_reg(Pirt128Register.CONF1)
 
-    def set_16b_reg(self, val: int, reg0: Register, reg1: Register):
+    def _set_16b_reg(self, val: int, reg0: Pirt128Register, reg1: Pirt128Register):
         '''
-        set_16b_reg writes the passed value to the passed registers as a 16 bit
-        little-endian integer.
+        Write the passed value to the passed registers as a 16 bit little-endian integer.
         '''
 
         # convert the value to little-endian bytes
         b = val.to_bytes(2, 'little')
 
         # write the register
-        if not self.mock:
-            self.spi.writebytes([reg0.value | reg_wr, b[0]])
-            self.spi.writebytes([reg1.value | reg_wr, b[1]])
+        if not self._mock:
+            self._spi.writebytes([reg0.value | self.REG_WR, b[0]])
+            self._spi.writebytes([reg1.value | self.REG_WR, b[1]])
 
         # wait a sec for it to apply
-        sleep(read_back_wait)
+        sleep(self.READ_BACK_WAIT)
 
-    def set_8b_reg(self, val: int, reg: Register):
+    def _set_8b_reg(self, val: int, reg: Pirt128Register):
+        '''
+        Write the passed value to the passed registers as a 8 bit integer.
+        '''
 
-        if not self.mock:
-            self.spi.writebytes([reg.value | reg_wr, val.to_bytes(1, 'little')])
+        if not self._mock:
+            self._spi.writebytes([reg.value | self.REG_WR, val.to_bytes(1, 'little')])
 
-    def set_integration(self, intr_seconds):
+    def set_integration(self, intr_seconds: float):
+        '''
+        Set the integration time.
+
+        Parameters
+        ----------
+        intr: float
+            Integration time in seconds to use while capturing.
+        '''
 
         # from the specified number of integration, get the number of integration
         # refclks, rounding down the float
-        intr_refclks = int(intr_seconds / refclk_cycle)
+        intr_refclks = int(intr_seconds / self.REFCLK_CYCLE)
 
         # validate the integration time
         if intr_refclks < 513:
@@ -173,7 +186,7 @@ class PIRT1280:
         # calculate the number of refclks in a frame by adding the number of refclks
         # of integration plus the number of refclks it takes to read out, with a little
         # bit of margin
-        frame_refclks = int(intr_refclks + (readout_refclks * readout_margin))
+        frame_refclks = int(intr_refclks + (self.READOUT_REFCLKS * self.READOUT_MARGIN))
 
         # convert the frame time and integration time refclks value to little-endian
         # bytes, so the first byte is the lowest byte, which is how it should be written
@@ -186,31 +199,44 @@ class PIRT1280:
         irb = intr_refclks.to_bytes(4, 'little')
 
         # write the frame time register
-        self.set_8b_reg(frb[0], Register.FT0)
-        self.set_8b_reg(frb[1], Register.FT0)
-        self.set_8b_reg(frb[2], Register.FT0)
-        self.set_8b_reg(frb[3], Register.FT0)
+        self._set_8b_reg(frb[0], Pirt128Register.FT0)
+        self._set_8b_reg(frb[1], Pirt128Register.FT1)
+        self._set_8b_reg(frb[2], Pirt128Register.FT2)
+        self._set_8b_reg(frb[3], Pirt128Register.FT3)
 
         # write the integration time register
-        self.set_8b_reg(irb[0], Register.IT0)
-        self.set_8b_reg(irb[1], Register.IT1)
-        self.set_8b_reg(irb[2], Register.IT2)
-        self.set_8b_reg(irb[3], Register.IT3)
+        self._set_8b_reg(irb[0], Pirt128Register.IT0)
+        self._set_8b_reg(irb[1], Pirt128Register.IT1)
+        self._set_8b_reg(irb[2], Pirt128Register.IT2)
+        self._set_8b_reg(irb[3], Pirt128Register.IT3)
 
         # wait a sec for it to apply
-        sleep(read_back_wait)
+        sleep(self.READ_BACK_WAIT)
 
     def _read_reg(self, reg: int) -> bytes:
 
-        if self.mock:
+        if self._mock:
             return b'\x00'
 
-        self.spi.writebytes([reg])
-        return self.spi.readbytes(1)
+        self._spi.writebytes([reg])
+        return self._spi.readbytes(1)
 
     def capture(self, intr: float = 0.0) -> bytes:
+        '''
+        Capure a image as raw bytes.
 
-        if self.mock:
+        Parameters
+        ----------
+        intr: float
+            Optional integration time in seconds to use while capturing.
+
+        Returns
+        -------
+        bytes:
+            The raw capture data.
+        '''
+
+        if self._mock:
             return bytes([random.randint(0, 255) for i in range(self.PIXEL_BYTES)])
 
         if intr != 0.0:
@@ -236,7 +262,21 @@ class PIRT1280:
         return imgbuf
 
     def capture_as_np_array(self, intr: float = 0.0) -> np.ndarray:
+        '''
+        Capure a image as numpy array.
+
+        Parameters
+        ----------
+        intr: float
+            Optional integration time in seconds to use while capturing.
+
+        Returns
+        -------
+        np.ndarray:
+            The data as a numpy array.
+        '''
 
         raw = self.capture(intr)
         data = np.frombuffer(raw, dtype=np.uint16).reshape(self.ROWS, self.COLS)
+
         return data

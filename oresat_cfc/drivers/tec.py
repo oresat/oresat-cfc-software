@@ -1,3 +1,6 @@
+'''
+The TEC (Thermoelectric Cooler) driver.
+'''
 import math as m
 import random
 
@@ -29,7 +32,7 @@ def res_to_temp_celcius(res: int) -> float:
     return temp_c
 
 
-class TEC:
+class Tec:
 
     R1 = 10000
     '''resistance of the upper resistor in the divider'''
@@ -37,33 +40,32 @@ class TEC:
     ADC_STEPS = 4096  # TODO should this be 4095?
     V_IN = 1.8
 
-    GPIO_PIN = 88
-
     ADC_PATH = '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'
 
-    def __init__(self, mock: bool = False):
+    def __init__(self, gpio_num: int, mock: bool = False):
 
         self.mock = mock
+        self._gpio_num = gpio_num
 
         self._tec_on = False  # is the TEC is currently on/off
 
         # setup GPIO and set to default state
         if not self.mock:
-            gpio.setup(self.GPIO_PIN, gpio.OUT)
+            gpio.setup(self._gpio_num, gpio.OUT)
         self.disable()
 
     def disable(self):
         '''Disable the TEC'''
 
         if not self.mock:
-            gpio.set(self.GPIO_PIN, 0)
+            gpio.set(self._gpio_num, 0)
         self._tec_on = False
 
     def enable(self):
         '''Enable the TEC'''
 
         if not self.mock:
-            gpio.set(self.GPIO_PIN, 1)
+            gpio.set(self._gpio_num, 1)
         self._tec_on = True
 
     def _get_temp(self) -> float:

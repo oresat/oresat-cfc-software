@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 from olaf import Resource, logger, TimerLoop, new_oresat_file
 
-from .drivers.pirt1280 import PIRT1280
-from .drivers.tec import TEC
+from .drivers.pirt1280 import Pirt1280
+from .drivers.tec import Tec
 from .tec_controller import TecController
 
 
@@ -19,7 +19,7 @@ class State(IntEnum):
 
 class CFCResource(Resource):
 
-    def __init__(self, camera: PIRT1280, tec: TEC):
+    def __init__(self, camera: Pirt1280, tec: Tec):
         super().__init__()
 
         self._state = State.STANDBY

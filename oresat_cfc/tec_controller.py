@@ -3,7 +3,7 @@ from datetime import datetime
 from olaf import logger
 from simple_pid import PID
 
-from .drivers.tec import TEC
+from .drivers.tec import Tec
 
 
 class TecController:
@@ -16,7 +16,7 @@ class TecController:
     and then came above it as the TEC because saturated with heat.
     '''
 
-    def __init__(self, tec: TEC):
+    def __init__(self, tec: Tec):
 
         self._tec = tec
 
