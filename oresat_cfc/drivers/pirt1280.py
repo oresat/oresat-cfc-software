@@ -143,7 +143,7 @@ class Pirt1280:
 
     def _set_16b_reg(self, val: int, reg0: Pirt128Register, reg1: Pirt128Register):
         '''
-        Write the passed value to the passed registers as a 16 bit little-endian integer.
+        Write a 16-bit int to a pair of registers.
         '''
 
         # convert the value to little-endian bytes
@@ -159,11 +159,11 @@ class Pirt1280:
 
     def _set_8b_reg(self, val: int, reg: Pirt128Register):
         '''
-        Write the passed value to the passed registers as a 8 bit integer.
+        Write a 8-bit int to a register.
         '''
 
         if not self._mock:
-            self._spi.writebytes([reg.value | self.REG_WR, val.to_bytes(1, 'little')])
+            self._spi.writebytes([reg.value | self.REG_WR, val])
 
     def set_integration(self, intr_seconds: float):
         '''
@@ -251,7 +251,7 @@ class Pirt1280:
         fio = io.FileIO(fd, closefd=False)
 
         # allocate buffer to read frame into
-        imgbuf = bytes(self.PIXEL_BYTES)
+        imgbuf = bytearray(self.PIXEL_BYTES)
 
         # read from prucam into buffer
         fio.readinto(imgbuf)
@@ -259,7 +259,7 @@ class Pirt1280:
         # close the char device
         os.close(fd)
 
-        return imgbuf
+        return bytes(imgbuf)
 
     def capture_as_np_array(self, intr: float = 0.0) -> np.ndarray:
         '''

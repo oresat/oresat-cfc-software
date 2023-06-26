@@ -62,38 +62,46 @@ class CFCResource(Resource):
         '''Run the state machine loop'''
 
         if self._state == State.CAPTURE:
-            self._capture(save=True)
+            self._capture_and_save()
 
         return True
 
-    def _capture(self, ext: str = '.bmp', save: bool = False) -> bytes:
+    def _capture_and_save(self) -> bytes:
+        '''Capture an raw image and save it'''
+
+        data = self._cam.capture()
+
+        # save capture
+        name = '/tmp/' + new_oresat_file('capture', ext='.raw')
+        with open(name, 'wb') as f:
+            f.write(data)
+
+        # add capture to fread cache
+        self.fread_cache.add(name, consume=True)
+        logger.info(f'saved new capture {name}')
+
+        return data
+
+    def _capture(self, ext: str = '.bmp') -> bytes:
         '''Capture an image to send to UI (heavy manipulated image for UI display)'''
 
         data = self._cam.capture_as_np_array()
 
-        # convert single pixel value int 3 values for bgr format (bgr value are all the same)
+        # convert single pixel value int 3 values for BGR format (BGR values are all the same)
         tmp = np.zeros((data.shape[0], data.shape[1], 3), dtype=data.dtype)
         for i in range(3):
             tmp[:, :, i] = data[:, :]
         data = tmp
 
-        # down scale data to uint8
-        data //= 255
-        data = data.astype(np.uint8)
+        # manipulate image for displaying
+        data *= 8  # scale 12-bits to 16-bits
+        data = np.invert(data)  # invert black/white values for displaying
+        data //= 255  # scale 16-bits to 8-bits
+        data = data.astype(np.uint8)  # imencode wants uint8 or uint64
 
         ok, encoded = cv2.imencode(ext, data)
         if not ok:
             raise ValueError(f'{ext} encode error')
-
-        if save:
-            # save capture
-            name = '/tmp/' + new_oresat_file('capture', ext=ext)
-            with open(name, 'wb') as f:
-                f.write(encoded)
-
-            # add capture to fread cache
-            self.fread_cache.add(name, consume=True)
-            logger.info(f'saved new capture {name}')
 
         return bytes(encoded)
 
