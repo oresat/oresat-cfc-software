@@ -131,17 +131,14 @@ class Pirt1280:
             gpio.setup(self._gpio_num, gpio.OUT)
             gpio.set(self._gpio_num, gpio.LOW)
 
-    def _read_8b_reg(self, reg: Pirt128Register) -> bytes:
+    def _read_8b_reg(self, reg: Pirt128Register) -> int:
         '''Read a 8-bit int from a register.'''
 
         if self._mock:
             return self._mock_regs[reg.value]
 
-        if gpio.read(self._gpio_num) != gpio.HIGH:
-            raise Pirt1280Error('cannot write value to PIRT1280 when it is off')
-
         self._spi.writebytes([reg.value])
-        return self._spi.readbytes(1)
+        return self._spi.readbytes(1)[0]
 
     def _write_8b_reg(self, value: int, reg: Pirt128Register):
         '''Write a 8-bit int to a register.'''
@@ -149,8 +146,6 @@ class Pirt1280:
         if self._mock:
             self._mock_regs[reg.value] = value
         else:
-            if gpio.read(self._gpio_num) != gpio.HIGH:
-                raise Pirt1280Error('cannot write value to PIRT1280 when it is off')
             self._spi.writebytes([reg.value | self.REG_WR, value])
 
         # wait a sec for it to apply
@@ -167,8 +162,6 @@ class Pirt1280:
             self._mock_regs[reg0.value] = b[0]
             self._mock_regs[reg1.value] = b[1]
         else:
-            if gpio.read(self._gpio_num) != gpio.HIGH:
-                raise Pirt1280Error('cannot write value to PIRT1280 when it is off')
             self._spi.writebytes([reg0.value | self.REG_WR, b[0]])
             self._spi.writebytes([reg1.value | self.REG_WR, b[1]])
 

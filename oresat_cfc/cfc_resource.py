@@ -96,7 +96,7 @@ class CFCResource(Resource):
         data = tmp
 
         # manipulate image for displaying
-        data *= 8  # scale 12-bits to 16-bits
+        data *= 4  # scale 14-bits to 16-bits
         data = np.invert(data)  # invert black/white values for displaying
         data //= 255  # scale 16-bits to 8-bits
         data = data.astype(np.uint8)  # imencode wants uint8 or uint64
