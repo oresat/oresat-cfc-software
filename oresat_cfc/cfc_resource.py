@@ -96,14 +96,13 @@ class CFCResource(Resource):
         data = tmp
 
         # manipulate image for displaying
-        data *= 4  # scale 14-bits to 16-bits
-        data = np.invert(data)  # invert black/white values for displaying
-        data //= 255  # scale 16-bits to 8-bits
+        data //= 64  # scale 14-bits to 8-bits
         data = data.astype(np.uint8)  # imencode wants uint8 or uint64
+        data = np.invert(data)  # invert black/white values for displaying
 
-        if sat_percent != 0:
-            sat_value = (255 * 100) // 90
-            sat_pixels = np.where(data[:, :] >= [sat_value] * 3)
+        if sat_percent > 0:
+            sat_value = (255 * sat_percent) // 100
+            sat_pixels = np.where(data[:, :] >= [sat_value, sat_value, sat_value])
             data[sat_pixels[0], sat_pixels[1]] = [0, 0, 255]  # red
 
         ok, encoded = cv2.imencode(ext, data)
