@@ -21,10 +21,12 @@ def main():
     mock_tec = 'tec' in mock_args or 'all' in mock_args
 
     # TODO get these from OD
+    camera_spi_bus = 1
+    camera_spi_device = 1
     camera_enable_pin = 86
     tec_enable_pin = 88
 
-    pirt1280 = Pirt1280(camera_enable_pin, mock_camera)
+    pirt1280 = Pirt1280(camera_spi_bus, camera_spi_device, camera_enable_pin, mock_camera)
     tec = Tec(tec_enable_pin, mock_tec)
 
     app.add_resource(CFCResource(pirt1280, tec))

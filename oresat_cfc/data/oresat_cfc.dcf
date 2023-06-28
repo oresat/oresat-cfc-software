@@ -4235,21 +4235,29 @@ PDOMapping=1
 [7000]
 ParameterName=Test Camera
 ObjectType=0x09
-SubNumber=2
+SubNumber=3
 
 [7000sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x01
+DefaultValue=0x02
 
-;Read to get a capture as a jpg
+;Read to get a capture as a jpg for displaying
 [7000sub1]
 ParameterName=Capture
 ObjectType=0x07
 DataType=0x000F
 AccessType=ro
+
+;Integration time in seconds
+[7000sub2]
+ParameterName=Intergation time
+ObjectType=0x07
+DataType=0x0008
+AccessType=rw
+DefaultValue=0
 
 [ManufacturerObjects]
 SupportedObjects=12

@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from olaf import Resource, logger, TimerLoop, new_oresat_file
 
-from .drivers.pirt1280 import Pirt1280
+from .drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
 from .drivers.tec import Tec
 from .tec_controller import TecController
 
@@ -25,7 +25,7 @@ class CFCResource(Resource):
         self._state = State.STANDBY
 
         self._cam = camera
-        self._cam.set_integration(0.05)
+        self._cam.integration_time = 0.05
 
         self._tec = tec
         self._tec_ctrl = TecController(self._tec)
@@ -41,6 +41,7 @@ class CFCResource(Resource):
         self._cam.enable()
 
         self.node.add_sdo_read_callback(self.test_camera_index, self.on_test_camera_read)
+        self.node.add_sdo_write_callback(self.test_camera_index, self.on_test_camera_write)
 
     def on_end(self):
 
@@ -82,10 +83,11 @@ class CFCResource(Resource):
 
         return data
 
-    def _capture(self, ext: str = '.bmp') -> bytes:
+    def _capture(self, ext: str = '.bmp', sat_percent: int = 90) -> bytes:
         '''Capture an image to send to UI (heavy manipulated image for UI display)'''
 
-        data = self._cam.capture_as_np_array()
+        raw = self._cam.capture()
+        data = pirt1280_raw_to_numpy(raw)
 
         # convert single pixel value int 3 values for BGR format (BGR values are all the same)
         tmp = np.zeros((data.shape[0], data.shape[1], 3), dtype=data.dtype)
@@ -99,6 +101,11 @@ class CFCResource(Resource):
         data //= 255  # scale 16-bits to 8-bits
         data = data.astype(np.uint8)  # imencode wants uint8 or uint64
 
+        if sat_percent != 0:
+            sat_value = (255 * 100) // 90
+            sat_pixels = np.where(data[:, :] >= [sat_value] * 3)
+            data[sat_pixels[0], sat_pixels[1]] = [0, 0, 255]  # red
+
         ok, encoded = cv2.imencode(ext, data)
         if not ok:
             raise ValueError(f'{ext} encode error')
@@ -108,8 +115,17 @@ class CFCResource(Resource):
     def on_test_camera_read(self, index: int, subindex: int):
         '''SDO read on the test camera obj'''
 
-        if index == self.test_camera_index and subindex == 0x1:
-            return self._capture(ext='.jpg')
+        if index == self.test_camera_index:
+            if subindex == 0x1:
+                return self._capture(ext='.jpg')
+            elif subindex == 0x2:
+                return self._cam.integration_time
+
+    def on_test_camera_write(self, index: int, subindex: int, value):
+        '''SDO write on the test camera obj'''
+
+        if index == self.test_camera_index and subindex == 0x2:
+            self._cam.integration_time = value
 
     def _tec_loop(self) -> True:
         '''Run the TEC loop'''
