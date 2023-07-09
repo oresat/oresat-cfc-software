@@ -2,9 +2,10 @@ import os
 
 from olaf import app, rest_api, olaf_setup, olaf_run, render_olaf_template
 
-from .drivers.tec import Tec
 from .drivers.pirt1280 import Pirt1280
-from .cfc_resource import CFCResource
+from .drivers.tec import Tec
+from .services.pirt1280 import Pirt1280Service
+from .services.tec import TecService
 
 
 @rest_api.app.route('/cfc')
@@ -20,16 +21,19 @@ def main():
     mock_camera = 'camera' in mock_args or 'all' in mock_args
     mock_tec = 'tec' in mock_args or 'all' in mock_args
 
-    # TODO get these from OD
-    camera_spi_bus = 1
-    camera_spi_device = 1
-    camera_enable_pin = 86
-    tec_enable_pin = 88
+    # get configs form OD
+    camera_spi_bus = app._od['Camera']['SPI bus'].value
+    camera_spi_device = app._od['Camera']['SPI device'].value
+    camera_enable_pin = app._od['Camera']['Enable gpio pin'].value
+    camera_adc_num = app._od['Camera']['ADC pin'].value
+    tec_enable_pin = app._od['TEC']['Enable gpio pin'].value
 
-    pirt1280 = Pirt1280(camera_spi_bus, camera_spi_device, camera_enable_pin, mock_camera)
+    pirt1280 = Pirt1280(camera_spi_bus, camera_spi_device, camera_enable_pin, camera_adc_num,
+                        mock_camera)
     tec = Tec(tec_enable_pin, mock_tec)
 
-    app.add_resource(CFCResource(pirt1280, tec))
+    app.add_service(Pirt1280Service(pirt1280))
+    app.add_service(TecService(pirt1280, tec))
 
     rest_api.add_template(f'{path}/templates/cfc.html')
 

@@ -110,7 +110,7 @@ AccessType=ro
 DefaultValue=0x00000000
 
 [OptionalObjects]
-SupportedObjects=87
+SupportedObjects=89
 1=0x1002
 2=0x1003
 3=0x1005
@@ -197,7 +197,9 @@ SupportedObjects=87
 84=0x1A0F
 85=0x1F80
 86=0x6000
-87=0x7000
+87=0x6001
+88=0x6002
+89=0x7000
 
 [1002]
 ParameterName=Manufacturer status register
@@ -3243,28 +3245,28 @@ ParameterName=Mapping object 2
 ObjectType=0x07
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x60000208
+DefaultValue=0x60010408
 
 [1A02sub3]
 ParameterName=Mapping object 3
 ObjectType=0x07
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x60000308
+DefaultValue=0x60010508
 
 [1A02sub4]
 ParameterName=Mapping object 4
 ObjectType=0x07
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x60000420
+DefaultValue=0x60020108
 
 [1A02sub5]
 ParameterName=Mapping object 5
 ObjectType=0x07
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x60020208
 
 [1A02sub6]
 ParameterName=Mapping object 6
@@ -4179,34 +4181,95 @@ AccessType=rw
 DefaultValue=0x00000008
 
 [6000]
-ParameterName=Tec
+ParameterName=State Machine
 ObjectType=0x09
-SubNumber=5
+SubNumber=4
 
 [6000sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x04
+DefaultValue=0x03
 
+;Read for current state or write to change state.
+;
+;States
+;- 0x01: CFC hardware is off
+;- 0x02: CFC hardware is on and waiting for commands
+;- 0x03: CFC is actively taking capture every x seconds
+;- 0xFF: Major error with CFC software/hardware
 [6000sub1]
-ParameterName=Enable
+ParameterName=Status
 ObjectType=0x07
-DataType=0x0001
+DataType=0x0005
 AccessType=rw
 DefaultValue=0
 PDOMapping=1
 
+;Deplay between captures in capture state in milliseconds
 [6000sub2]
-ParameterName=Saturated
+ParameterName=Capture delay
+ObjectType=0x07
+DataType=0x0007
+AccessType=rw
+DefaultValue=0
+
+;How many images to capture in CAPTURE state
+[6000sub3]
+ParameterName=Captures
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=1
+
+[6001]
+ParameterName=Camera
+ObjectType=0x09
+SubNumber=8
+
+[6001sub0]
+ParameterName=Highest sub-index supported
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=0x07
+
+;The GPIO pin used to enable/disable the camera
+[6001sub1]
+ParameterName=Enable gpio pin
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=66
+
+;The camera SPI bus
+[6001sub2]
+ParameterName=SPI bus
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=1
+
+;The camera SPI device
+[6001sub3]
+ParameterName=SPI device
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=1
+
+;Camera is enabled/disabled.
+[6001sub4]
+ParameterName=Enabled
 ObjectType=0x07
 DataType=0x0001
 AccessType=ro
 DefaultValue=0
 PDOMapping=1
 
-[6000sub3]
+;The camera's current temperature in celsius
+[6001sub5]
 ParameterName=Temperature
 ObjectType=0x07
 DataType=0x0002
@@ -4214,38 +4277,99 @@ AccessType=ro
 DefaultValue=0
 PDOMapping=1
 
-[6000sub4]
-ParameterName=Captures
+;The ADC pin for the camera's current temperature 
+[6001sub6]
+ParameterName=ADC pin
 ObjectType=0x07
-DataType=0x0007
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+
+;Intergation time in seconds
+[6001sub7]
+ParameterName=Intergation time
+ObjectType=0x07
+DataType=0x0008
+AccessType=rw
+DefaultValue=0
+
+[6002]
+ParameterName=TEC
+ObjectType=0x09
+SubNumber=5
+
+[6002sub0]
+ParameterName=Highest sub-index supported
+ObjectType=0x07
+DataType=0x0005
+AccessType=const
+DefaultValue=0x04
+
+;TEC is enabled/disabled.
+[6002sub1]
+ParameterName=Enabled
+ObjectType=0x07
+DataType=0x0001
 AccessType=ro
 DefaultValue=0
 PDOMapping=1
 
+[6002sub2]
+ParameterName=Saturated
+ObjectType=0x07
+DataType=0x0001
+AccessType=ro
+DefaultValue=0
+PDOMapping=1
+
+;Target temperature in celsius
+[6002sub3]
+ParameterName=Target temperature
+ObjectType=0x07
+DataType=0x0002
+AccessType=ro
+DefaultValue=0
+PDOMapping=1
+
+;The GPIO pin used to enable/disable the TEC
+[6002sub4]
+ParameterName=Enable gpio pin
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=68
+
 [7000]
-ParameterName=Test Camera
+ParameterName=Test camera
 ObjectType=0x09
-SubNumber=3
+SubNumber=4
 
 [7000sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x02
+DefaultValue=0x03
 
-;Read to get a capture as a jpg for displaying
+;Read to get a raw capture
 [7000sub1]
-ParameterName=Capture
+ParameterName=Capture raw
 ObjectType=0x07
 DataType=0x000F
 AccessType=ro
 
-;Integration time in seconds
+;Read to get a capture as a jpg for displaying
 [7000sub2]
-ParameterName=Intergation time
+ParameterName=Capture display jpg
 ObjectType=0x07
-DataType=0x0008
+DataType=0x000F
+AccessType=ro
+
+;Enable / disable the camera. Can only be written to when in standby state.
+[7000sub3]
+ParameterName=Enable
+ObjectType=0x07
+DataType=0x0001
 AccessType=rw
 DefaultValue=0
 

@@ -9,11 +9,9 @@ import math as m
 from time import sleep
 from enum import IntEnum
 
-import cv2
-import gpio
 import numpy as np
 from spidev import SpiDev
-from olaf import Adc
+from olaf import Adc, Gpio, Pru
 
 
 class Pirt1280Error(Exception):
@@ -94,6 +92,7 @@ class Pirt1280:
         self._gpio_num = gpio_num
         self._mock = mock
         self._adc = Adc(adc_pin, mock=True)
+        self._gpio = Gpio(gpio_num, mock=mock)
 
         if mock:
             self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
@@ -101,6 +100,8 @@ class Pirt1280:
             self._spi = SpiDev()
             self._spi.open(spi_bus, spi_device)
             self._spi.max_speed_hz = self.SPI_HZ
+            self._pru0 = Pru(0)
+            self._pru1 = Pru(1)
 
         self._enable = False
 
@@ -113,8 +114,9 @@ class Pirt1280:
 
         # set the enable GPIO high
         if not self._mock:
-            gpio.setup(self._gpio_num, gpio.OUT)
-            gpio.set(self._gpio_num, gpio.HIGH)
+            self._pru1.start()  # 1 before 0
+            self._pru0.start()
+            self._gpio.high()
 
         self._enable = True
 
@@ -134,8 +136,9 @@ class Pirt1280:
         '''Disable the PIRT1280 (power it off).'''
 
         if not self._mock:
-            gpio.setup(self._gpio_num, gpio.OUT)
-            gpio.set(self._gpio_num, gpio.LOW)
+            self._pru0.start()
+            self._pru1.start()
+            self._gpio.low()
 
         self._enable = False
 
@@ -319,54 +322,3 @@ def pirt1280_raw_to_numpy(raw: bytes) -> np.ndarray:
     '''Convert the raw capture from Pirt1280 to a numpy array.'''
 
     return np.frombuffer(raw, dtype=np.uint16).reshape(Pirt1280.ROWS, Pirt1280.COLS)
-
-
-def pirt1280_make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
-                                downscale_factor: int = 1) -> bytes:
-    '''
-    Generate an image to send to UI (heavy manipulated image for UI display).
-
-    Parameters
-    ----------
-    raw: bytes
-        The raw PIRT1280 data.
-    ext: str
-        The extension of the file to generate.
-    sat_percent: int
-        Option to color pixel above a saturation percentage red. Set to 0 to disable.
-    downscale_factor: int
-        Downscale factor size in both row and columns. Set to 1 or less to not downscale.
-    '''
-
-    data = pirt1280_raw_to_numpy(raw)
-
-    # convert single pixel value int 3 values for BGR format (BGR values are all the same)
-    tmp = np.zeros((data.shape[0], data.shape[1], 3), dtype=data.dtype)
-    for i in range(3):
-        tmp[:, :, i] = data[:, :]
-    data = tmp
-
-    # flip the image because it is read upside down
-    data = cv2.flip(data, 0)
-    data = cv2.flip(data, 1)
-
-    # manipulate image for displaying
-    data //= 64  # scale 14-bits to 8-bits
-    data = data.astype(np.uint8)  # imencode wants uint8 or uint64
-    data = np.invert(data)  # invert black/white values for displaying
-
-    # downscale image
-    if downscale_factor > 1:
-        data = np.copy(data[::downscale_factor, ::downscale_factor])
-
-    # color saturate pixel red
-    if sat_percent > 0:
-        sat_value = (255 * sat_percent) // 100
-        sat_pixels = np.where(data[:, :] >= [sat_value, sat_value, sat_value])
-        data[sat_pixels[0], sat_pixels[1]] = [0, 0, 255]  # red
-
-    ok, encoded = cv2.imencode(ext, data)
-    if not ok:
-        raise ValueError(f'{ext} encode error')
-
-    return bytes(encoded)

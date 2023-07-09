@@ -1,44 +1,183 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
   <style>
+    table {
+      font-family: arial, sans-serif;
+      border-collapse: collapse;
+      margin-left: auto;
+      margin-right: auto;
+      width: 80%;
+    }
+    td, th {
+      border: 1px solid #dddddd;
+      text-align: left;
+      padding: 8px;
+      width: 50%;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: 25% 50% 25%;
+    }
+    #gridColum {
+      text-align: center;
+    }
     #image {
-      width: 45%;
+      width: 90%;
     }
   </style>
-  <p>
-    <b>TEC (Thermoelectric Cooler):</b>
-    <span id=tecEnable>DISABLED</span> /
-    <span id=tecSaturated>NOT_SATURATED</span> /
-    <span id=tecTemperature>0</span>°C
-  <p>
-  <!--the '//:0' is a basically the way to make any empty img-->
-  <img id='image' src='//:0' alt='capture'/>
+  <div id="grid">
+    <div id="gridColumn">
+      <!--only here for spacing-->
+    </div>
+    <div id="gridColumn">
+      <!--the "//:0" is a basically the way to make any empty img-->
+      <img id="image" src="//:0" alt="capture"/>
+      <br/>
+      <button onclick="downloadRawImage()">Download Raw Image</button>
+      <button onclick="downloadDisplayImage()">Download Display Image</button>
+    </div>
+    <div id="gridColumn">
+      <h4>State Machine</h4>
+      <table>
+        <tr>
+          <td>Status</td>
+          <td><span id="cfcState">STANDBY</span></td>
+        </tr>
+      </table>
+      <br />
+      <h4>Camera</h4>
+      <table>
+        <tr>
+          <td>Enable Status</td>
+          <td><span id="cameraStatus">DISABLED</span></td>
+        </tr>
+        <tr>
+          <td>Intergation Time</td>
+          <td><span id="cameraIntergrationTime">0</span> ms</td>
+        </tr>
+        <tr>
+          <td>Current Temperature</td>
+          <td><span id="cameraTemperature">0</span> °C</td>
+        </tr>
+      </table>
+      <br />
+      <h4>TEC (Thermoelectric Cooler)</h4>
+      <table>
+        <tr>
+          <td>Enable Status</td>
+          <td><span id="tecStatus">DISABLED</span></td>
+        </tr>
+        <tr>
+          <td>Saturation Status</td>
+          <td><span id="tecSaturated">SATURATED</span></td>
+        </tr>
+        <tr>
+          <td>Target Temperature</td>
+          <td><span id="tecTargetTemperature">0</span> °C</td>
+        </tr>
+      </table>
+      <br />
+    </div>
+  </div>
   <script>
+    let lastDisplayImage;
+    const settingsButton = document.getElementById("changeSettings");
+    const cancelButton = document.getElementById("cancel");
+
+    /** Let the user download the raw image */
+    async function downloadRawImage() {
+      let obj = await readValue("0x7000", "0x1");
+      const unixTime = Math.floor(Date.now() / 1000);
+      downloadFile(`cfc_capture_${unixTime}.raw`, obj.value);
+    }
+
+    /** Let the user download the display image */
+    function downloadDisplayImage() {
+      const unixTime = Math.floor(Date.now() / 1000);
+      downloadFile(`cfc_capture_${unixTime}.jpg`, lastDisplayImage);
+    }
+
+    /** Let the user download a file */
+    function downloadFile(filename, data) {
+      const byteCharacters = atob(data);
+      const byteArrays = [];
+      const sliceSize = 512;
+
+      for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+        const slice = byteCharacters.slice(offset, offset + sliceSize);
+
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+
+      const blob = new Blob(byteArrays, {
+        type: "application/octet-stream",
+      });
+
+      const a = document.createElement("a");
+      a.download = filename;
+      a.href = window.URL.createObjectURL(blob);
+      a.click();
+    }
+
+    async function getState() {
+      const state = await readValue("0x6000", "0x1")
+    }
+
+    const STATES = {
+      0x00: "OFF",
+      0x01: "STANDBY",
+      0x02: "CAPTURE",
+      0xFF: "ERROR",
+    };
+
+    /** Capture an image */
     async function takeCapture() {
-      let obj = await readValue('0x7000', '0x1');
-      document.getElementById('image').src = 'data:image/jpg;base64, ' + obj.value;
+      let obj;
 
-      obj = await readValue('0x6000', null);
+      // take display image capture
+      obj = await readValue("0x7000", "0x2");
+      lastDisplayImage = obj.value;
+      document.getElementById("image").src = "data:image/jpg;base64, " + obj.value;
 
-      if (obj.subindexes[1].value) {
-        document.getElementById('tecEnable').innerHTML = 'ENABLED';
+      // get CFC state
+      obj = await readValue("0x6000", "0x1");
+      document.getElementById("cfcState").innerHTML = STATES[obj.value];
+
+      // get camera info
+      obj = await readValue("0x6001", null);
+      if (obj.subindexes[4].value === true) {
+        document.getElementById("cameraStatus").innerHTML = "ENABLED";
       } else {
-        document.getElementById('tecEnable').innerHTML = 'DISABLED';
+        document.getElementById("cameraStatus").innerHTML = "DISABLED";
       }
+      document.getElementById("cameraTemperature").innerHTML = obj.subindexes[5].value;
+      document.getElementById("cameraIntergrationTime").innerHTML = Math.round(obj.subindexes[7].value);
 
+      // update TEC info
+      obj = await readValue("0x6002", null);
+      if (obj.subindexes[1].value === true) {
+        document.getElementById("tecStatus").innerHTML = "ENABLED";
+      } else {
+        document.getElementById("tecStatus").innerHTML = "DISABLED";
+      }
       if (obj.subindexes[2].value) {
-        document.getElementById('tecSaturated').innerHTML = 'SATURATED';
+        document.getElementById("tecSaturated").innerHTML = "SATURATED";
       } else {
-        document.getElementById('tecSaturated').innerHTML = 'NOT_SATURATED';
+        document.getElementById("tecSaturated").innerHTML = "NOT_SATURATED";
       }
-      
-      document.getElementById('tecTemperature').innerHTML = obj.subindexes[3].value;
+      document.getElementById("tecTargetTemperature").innerHTML = obj.subindexes[3].value;
     }
 
     takeCapture();
     const interval = setInterval(function() {
       takeCapture();
-    }, 2000);
+    }, 2500);
   </script>
 {% endblock %}
