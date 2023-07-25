@@ -14,12 +14,14 @@ class CfcState(IntEnum):
     OFF = 0x1
     STANDBY = 0x2
     CAPTURE = 0x3
+    ERROR = 0xFF
 
 
 STATE_TRANSMISSIONS = {
     CfcState.OFF: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE],
     CfcState.STANDBY: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE],
-    CfcState.CAPTURE: [CfcState.OFF, CfcState.STANDBY],
+    CfcState.CAPTURE: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE, CfcState.ERROR],
+    CfcState.ERROR: [CfcState.OFF],
 }
 
 

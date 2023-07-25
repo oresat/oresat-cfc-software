@@ -93,6 +93,7 @@ class Pirt1280:
         self._mock = mock
         self._adc = Adc(adc_pin, mock=True)
         self._gpio = Gpio(gpio_num, mock=mock)
+        self._intergration_time = 1000  # reduce IO calls
 
         if mock:
             self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
@@ -219,19 +220,13 @@ class Pirt1280:
     def integration_time(self) -> float:
         '''float: The integration time in milliseconds.'''
 
-        raw = bytes([
-            self._read_8b_reg(Pirt1280Register.IT0),
-            self._read_8b_reg(Pirt1280Register.IT1),
-            self._read_8b_reg(Pirt1280Register.IT2),
-            self._read_8b_reg(Pirt1280Register.IT3),
-        ])
-
-        intr_refclks = int.from_bytes(raw, 'little')
-
-        return intr_refclks * self.REFCLK_CYCLE * 1000
+        return self._intergration_time
 
     @integration_time.setter
     def integration_time(self, value: float):
+
+        if value == self._intergration_time:
+            return  # nothing todo
 
         # from the specified number of integration_time, get the number of integration_time
         # refclks, rounding down the float
@@ -270,6 +265,8 @@ class Pirt1280:
 
         # wait a sec for it to apply
         sleep(self.READ_BACK_WAIT)
+
+        self._intergration_time = value
 
     def _get_temp(self) -> float:
         '''Get the raw temperature of the sensor.'''

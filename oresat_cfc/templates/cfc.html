@@ -61,8 +61,8 @@
           <td><span id="cameraStatus">DISABLED</span></td>
         </tr>
         <tr>
-          <td>Intergation Time</td>
-          <td><span id="cameraIntergrationTime">0</span> ms</td>
+          <td>Integration Time</td>
+          <td><span id="cameraIntegrrationTime">0</span> ms</td>
         </tr>
         <tr>
           <td>Current Temperature</td>
@@ -130,7 +130,7 @@
         <input id="tecEnable" type="checkbox">
         <br>
         <br>
-        <label for="newTargetTemp">Target Temperature:</label>
+        <label for="newTargetTemp">Target Temperature (°C):</label>
         <input id="newTargetTemp" type="number" step="1">
       </p>
       <div>
@@ -165,7 +165,9 @@
         writeValue("0x6000", "0x1", document.getElementById("newState").selectedIndex + 1);
         writeValue("0x6000", "0x2", parseInt(document.getElementById("newCapDelay").value));
         writeValue("0x6000", "0x3", parseInt(document.getElementById("newCapCount").value));
-        writeValue("0x6001", "0x7", document.getElementById("newIntTime").value);
+        if (parseFloat(document.getElementById("newIntTime").value) > 0) {
+          writeValue("0x6001", "0x7", parseFloat(document.getElementById("newIntTime").value));
+        }
         writeValue("0x6002", "0x1", document.getElementById("tecEnable").checked);
         writeValue("0x6002", "0x3", document.getElementById("newTargetTemp").value);
       }
@@ -238,6 +240,7 @@
       0x01: "OFF",
       0x02: "STANDBY",
       0x03: "CAPTURE",
+      0xFF: "ERROR",
     };
 
     /** Capture an image */
@@ -263,7 +266,7 @@
         document.getElementById("cameraStatus").innerHTML = "DISABLED";
       }
       document.getElementById("cameraTemperature").innerHTML = obj.subindexes[5].value;
-      document.getElementById("cameraIntergrationTime").innerHTML = Math.round(obj.subindexes[7].value);
+      document.getElementById("cameraIntegrrationTime").innerHTML = Math.round(obj.subindexes[7].value);
 
       // update TEC info
       obj = await readValue("0x6002", null);
