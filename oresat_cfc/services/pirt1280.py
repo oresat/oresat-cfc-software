@@ -29,7 +29,7 @@ class Pirt1280Service(Service):
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
 
-        self._state = CfcState.STANDBY
+        self._state = CfcState.OFF
 
         self._pirt1280 = pirt1280
 
@@ -38,6 +38,9 @@ class Pirt1280Service(Service):
         self.test_camera_index = 0x7000
 
     def on_start(self):
+
+        self.capture_delay_obj = self.node.od[self.state_index][2]
+        self.capture_count_obj = self.node.od[self.state_index][3]
 
         self.node.add_sdo_read_callback(self.state_index, self.on_state_read)
         self.node.add_sdo_write_callback(self.state_index, self.on_state_write)
@@ -62,7 +65,10 @@ class Pirt1280Service(Service):
             self._pirt1280.disable()
             self.state = CfcState.OFF
 
-    def _state_machine_transittion(self, new_state: CfcState):
+    def _state_machine_transittion(self, new_state: CfcState or int):
+
+        if isinstance(new_state, int):
+            new_state = CfcState(new_state)
 
         if new_state not in STATE_TRANSMISSIONS[self._state]:
             return
@@ -88,10 +94,11 @@ class Pirt1280Service(Service):
             elif self._state == CfcState.CAPTURE:
                 self._count += 1
                 self._capture()
-                if self._capture_size != 0 and self._count > self._capture_size:
+                if self._capture_count_obj.value != 0 and \
+                        self._count > self._capture_count_obj.value:
                     self._state_machine_transittion(CfcState.STANDBY)
                 else:
-                    self._event.wait(self.delay)
+                    self._event.wait(self.capture_delay_obj.value)
             else:
                 self._state = CfcState.OFF
 
@@ -132,7 +139,7 @@ class Pirt1280Service(Service):
         '''SDO read on the state machine obj'''
 
         if index == self.camera_index and subindex == 0x1:
-            self._pirt1280.integration_time = value
+            self._state_machine_transittion(value)
 
     def on_camera_read(self, index: int, subindex: int):
         '''SDO read on the camera obj'''
@@ -165,37 +172,6 @@ class Pirt1280Service(Service):
         elif subindex == 0x7:
             self._pirt1280.integration_time = value
 
-    def on_tec_read(self, index: int, subindex: int):
-        '''SDO read on the camera obj'''
-
-        if index != self.tec_index:
-            return
-
-        ret = None
-
-        if subindex == 0x1:
-            ret = self._tec_enabled
-        elif subindex == 0x2:
-            ret = self._saturated
-        elif subindex == 0x3:
-            ret = self._pid.setpoint
-
-        return ret
-
-    def on_tec_write(self, index: int, subindex: int, value):
-        '''SDO read on the camera obj'''
-
-        if index != self.tec_index:
-            return
-
-        if subindex == 0x1:
-            if value:
-                self.tec_enable()
-            else:
-                self.tec_disable()
-        elif subindex == 0x3:
-            self._pid.setpoint = value
-
     def on_test_camera_read(self, index: int, subindex: int):
         '''SDO read on the test camera obj'''
 
@@ -206,11 +182,11 @@ class Pirt1280Service(Service):
 
         if subindex == 0x1:
             ret = self._last_capture
-        elif subindex == 0x2:
+        elif subindex == 0x2 and self._state != CfcState.OFF:
             self._last_capture = self._pirt1280.capture()
             ret = make_display_image(self._last_capture, downscale_factor=2)
-        elif subindex == 0x2:
-            ret = self._pirt1280.enabled
+        elif subindex == 0x3:
+            ret = self._pirt1280.is_enabled
 
         return ret
 

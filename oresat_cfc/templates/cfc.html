@@ -42,7 +42,7 @@
       <table>
         <tr>
           <td>Status</td>
-          <td><span id="cfcState">STANDBY</span></td>
+          <td><span id="cfcState">OFF</span></td>
         </tr>
       </table>
       <br />
@@ -131,10 +131,9 @@
     }
 
     const STATES = {
-      0x00: "OFF",
-      0x01: "STANDBY",
-      0x02: "CAPTURE",
-      0xFF: "ERROR",
+      0x01: "OFF",
+      0x02: "STANDBY",
+      0x03: "CAPTURE",
     };
 
     /** Capture an image */
