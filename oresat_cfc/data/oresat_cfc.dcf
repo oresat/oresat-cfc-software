@@ -4252,7 +4252,7 @@ ParameterName=Enable gpio pin
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=66
+DefaultValue=86
 
 ;The camera SPI bus
 [6001sub2]
@@ -4348,7 +4348,7 @@ ParameterName=Enable gpio pin
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=68
+DefaultValue=88
 
 [7000]
 ParameterName=Test camera
