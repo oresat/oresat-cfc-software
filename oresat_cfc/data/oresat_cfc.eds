@@ -4213,11 +4213,11 @@ ParameterName=Capture delay
 ObjectType=0x07
 DataType=0x0007
 AccessType=rw
-DefaultValue=0
+DefaultValue=1000
 
 ;How many images to capture in CAPTURE state
 [6000sub3]
-ParameterName=Captures
+ParameterName=Capture count
 ObjectType=0x07
 DataType=0x0005
 AccessType=rw
@@ -4282,10 +4282,10 @@ PDOMapping=1
 ParameterName=ADC pin
 ObjectType=0x07
 DataType=0x0005
-AccessType=rw
+AccessType=const
 DefaultValue=0
 
-;Intergation time in seconds
+;Intergation time in milliseconds
 [6001sub7]
 ParameterName=Intergation time
 ObjectType=0x07
@@ -4310,7 +4310,7 @@ DefaultValue=0x04
 ParameterName=Enabled
 ObjectType=0x07
 DataType=0x0001
-AccessType=ro
+AccessType=rw
 DefaultValue=0
 PDOMapping=1
 
@@ -4327,7 +4327,7 @@ PDOMapping=1
 ParameterName=Target temperature
 ObjectType=0x07
 DataType=0x0002
-AccessType=ro
+AccessType=rw
 DefaultValue=0
 PDOMapping=1
 
@@ -4336,7 +4336,7 @@ PDOMapping=1
 ParameterName=Enable gpio pin
 ObjectType=0x07
 DataType=0x0005
-AccessType=rw
+AccessType=const
 DefaultValue=68
 
 [7000]

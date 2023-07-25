@@ -17,7 +17,7 @@ class CfcState(IntEnum):
 
 
 STATE_TRANSMISSIONS = {
-    CfcState.OFF: [CfcState.OFF, CfcState.STANDBY],
+    CfcState.OFF: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE],
     CfcState.STANDBY: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE],
     CfcState.CAPTURE: [CfcState.OFF, CfcState.STANDBY],
 }
@@ -30,6 +30,7 @@ class Pirt1280Service(Service):
         super().__init__()
 
         self._state = CfcState.OFF
+        self._last_capture = None
 
         self._pirt1280 = pirt1280
 
@@ -39,8 +40,8 @@ class Pirt1280Service(Service):
 
     def on_start(self):
 
-        self.capture_delay_obj = self.node.od[self.state_index][2]
-        self.capture_count_obj = self.node.od[self.state_index][3]
+        self._capture_delay_obj = self.node.od[self.state_index][2]
+        self._capture_count_obj = self.node.od[self.state_index][3]
 
         self.node.add_sdo_read_callback(self.state_index, self.on_state_read)
         self.node.add_sdo_write_callback(self.state_index, self.on_state_write)
@@ -63,7 +64,7 @@ class Pirt1280Service(Service):
             logger.error(e)
             self.tec_disable()
             self._pirt1280.disable()
-            self.state = CfcState.OFF
+            self._state = CfcState.OFF
 
     def _state_machine_transittion(self, new_state: CfcState or int):
 
@@ -71,42 +72,41 @@ class Pirt1280Service(Service):
             new_state = CfcState(new_state)
 
         if new_state not in STATE_TRANSMISSIONS[self._state]:
+            logger.error(f'invalid state transistion {self._state.name} -> {new_state.name}')
             return
 
         if new_state == CfcState.OFF:
-            self.tec_disable()
-            self.camera_disable()
+            self._pirt1280.disable()
         elif new_state in list(CfcState):
-            self.camera_enable()
-            self.count = 0
+            self._pirt1280.enable()
+            self._count = 0
 
-        self.state = new_state
+        logger.info(f'state transistion {self._state.name} -> {new_state.name}')
+        self._state = new_state
 
-    def _state_machine_loop(self):
+    def on_loop(self):
 
-        self.count = 0
-
-        while not self._event.is_set():
-            if self._state == CfcState.OFF:
-                self._event.wait(1)
-            elif self._state == CfcState.STANDBY:
-                self._event.wait(1)
-            elif self._state == CfcState.CAPTURE:
-                self._count += 1
-                self._capture()
-                if self._capture_count_obj.value != 0 and \
-                        self._count > self._capture_count_obj.value:
-                    self._state_machine_transittion(CfcState.STANDBY)
-                else:
-                    self._event.wait(self.capture_delay_obj.value)
+        if self._state == CfcState.OFF:
+            self._event.wait(1)
+        elif self._state == CfcState.STANDBY:
+            self._event.wait(1)
+        elif self._state == CfcState.CAPTURE:
+            self._count += 1
+            self._capture()
+            if self._capture_count_obj.value != 0 and \
+                    self._count >= self._capture_count_obj.value:
+                self._state_machine_transittion(CfcState.STANDBY)
             else:
-                self._state = CfcState.OFF
+                self._event.wait(self._capture_delay_obj.value / 1000)
+        else:
+            self._state = CfcState.OFF
 
     def _capture(self, count: int = 1):
         '''Capture x raw images in a row with no delay and save them to fread cache'''
 
+        logger.debug('new capture')
         dt = time()
-        raw = self._pirt1280.capture()
+        self._last_capture = self._pirt1280.capture()
         metadata = {
             'sw_version': __version__,
             'time': dt,
@@ -115,7 +115,7 @@ class Pirt1280Service(Service):
         }
 
         file_name = '/tmp/' + new_oresat_file('capture', date=dt, ext='.tiff')
-        data = pirt1280_raw_to_numpy(raw)
+        data = pirt1280_raw_to_numpy(self._last_capture)
 
         tifffile.imwrite(
             file_name,
@@ -127,7 +127,7 @@ class Pirt1280Service(Service):
             compressionargs={'level': 1}  # images do not compress well
         )
 
-        self.fread_cache.add(file_name, consume=True)
+        self.node.fread_cache.add(file_name, consume=True)
 
     def on_state_read(self, index: int, subindex: int):
         '''SDO read on the state machine obj'''
@@ -138,7 +138,7 @@ class Pirt1280Service(Service):
     def on_state_write(self, index: int, subindex: int, value):
         '''SDO read on the state machine obj'''
 
-        if index == self.camera_index and subindex == 0x1:
+        if index == self.state_index and subindex == 0x1:
             self._state_machine_transittion(value)
 
     def on_camera_read(self, index: int, subindex: int):
@@ -161,15 +161,8 @@ class Pirt1280Service(Service):
     def on_camera_write(self, index: int, subindex: int, value):
         '''SDO read on the camera obj'''
 
-        if index != self.camera_index:
-            return
-
-        if subindex == 0x4:
-            if value:
-                self._pirt1280.enable()
-            else:
-                self._pirt1280.disable()
-        elif subindex == 0x7:
+        if index == self.camera_index and subindex == 0x7:
+            logger.info(f'changing integration time to {value} ms')
             self._pirt1280.integration_time = value
 
     def on_test_camera_read(self, index: int, subindex: int):
@@ -182,8 +175,7 @@ class Pirt1280Service(Service):
 
         if subindex == 0x1:
             ret = self._last_capture
-        elif subindex == 0x2 and self._state != CfcState.OFF:
-            self._last_capture = self._pirt1280.capture()
+        elif subindex == 0x2 and self._last_capture is not None:
             ret = make_display_image(self._last_capture, downscale_factor=2)
         elif subindex == 0x3:
             ret = self._pirt1280.is_enabled
@@ -197,8 +189,10 @@ class Pirt1280Service(Service):
             return
 
         if value:
+            logger.info('enabling pirt1280')
             self.camera.enable()
         else:
+            logger.info('disabling pirt1280')
             self.camera.disable()
 
 
