@@ -4285,13 +4285,13 @@ DataType=0x0005
 AccessType=const
 DefaultValue=0
 
-;Intergation time in milliseconds
+;Integration time in milliseconds
 [6001sub7]
-ParameterName=Intergation time
+ParameterName=Integration time
 ObjectType=0x07
 DataType=0x0008
 AccessType=rw
-DefaultValue=0
+DefaultValue=1
 
 [6002]
 ParameterName=TEC

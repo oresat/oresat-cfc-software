@@ -125,8 +125,8 @@ class Pirt1280Service(Service):
             dtype=data.dtype,
             metadata=metadata,
             photometric='miniswhite',
-            compression='zstd',
-            compressionargs={'level': 1}  # images do not compress well
+            # compression='zstd',
+            # compressionargs={'level': 1}  # images do not compress well
         )
 
         self.node.fread_cache.add(file_name, consume=True)
@@ -178,7 +178,7 @@ class Pirt1280Service(Service):
         if subindex == 0x1:
             ret = self._last_capture
         elif subindex == 0x2 and self._last_capture is not None:
-            ret = make_display_image(self._last_capture, downscale_factor=2)
+            ret = make_display_image(self._last_capture, sat_percent=95, downscale_factor=2)
         elif subindex == 0x3:
             ret = self._pirt1280.is_enabled
 
@@ -223,9 +223,11 @@ def make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
         tmp[:, :, i] = data[:, :]
     data = tmp
 
+    '''
     # flip the image because it is read upside down
     data = cv2.flip(data, 0)
     data = cv2.flip(data, 1)
+    '''
 
     # manipulate image for displaying
     data //= 64  # scale 14-bits to 8-bits
