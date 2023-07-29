@@ -4296,14 +4296,14 @@ DefaultValue=1
 [6002]
 ParameterName=TEC
 ObjectType=0x09
-SubNumber=5
+SubNumber=6
 
 [6002sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x04
+DefaultValue=0x05
 
 ;TEC is enabled/disabled.
 [6002sub1]
@@ -4338,6 +4338,17 @@ ObjectType=0x07
 DataType=0x0005
 AccessType=const
 DefaultValue=88
+
+;The difference between the current temp and the setpoint at which the TEC is
+;considered saturated and therefore should be disabled. Note that it would
+;only be considered saturated after it first crossed below the saturation
+;and then came above it as the TEC because saturated with heat.
+[6002sub5]
+ParameterName=Saturation difference
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=6
 
 [7000]
 ParameterName=Test camera

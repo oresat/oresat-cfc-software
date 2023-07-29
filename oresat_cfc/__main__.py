@@ -5,12 +5,12 @@ from olaf import app, rest_api, olaf_setup, olaf_run, render_olaf_template
 from .drivers.pirt1280 import Pirt1280
 from .drivers.rc625 import Rc625
 from .services.camera import CameraService
-from .services.tec import TecService
+from .services.tec_controller import TecControllerService
 
 
 @rest_api.app.route('/cfc')
 def camera_template():
-    return render_olaf_template('cfc.html', name='CFC')
+    return render_olaf_template('cfc.html', name='CFC (Cirrus Flux Camera)')
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
     rc6_25 = Rc625(tec_enable_pin, mock_tec)
 
     app.add_service(CameraService(pirt1280))
-    app.add_service(TecService(pirt1280, rc6_25))
+    app.add_service(TecControllerService(pirt1280, rc6_25))
 
     rest_api.add_template(f'{path}/templates/cfc.html')
 

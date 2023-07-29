@@ -1,3 +1,10 @@
+'''
+Main camera service.
+
+Seperate from the TEC controller service as the camera can be used regaurdless if the TEC is
+enabled or not.
+'''
+
 from enum import IntEnum
 from time import time
 
@@ -10,18 +17,23 @@ from .. import __version__
 from ..drivers.pirt1280 import Pirt1280, pirt1280_raw_to_numpy
 
 
-class CfcState(IntEnum):
+class CameraState(IntEnum):
     OFF = 0x1
+    '''Camera is off'''
     STANDBY = 0x2
+    '''Camera is on, but no doing anything'''
     CAPTURE = 0x3
+    '''Camera is capturing image and saving them to freac cache'''
     ERROR = 0xFF
+    '''Error with camera hardware'''
 
 
 STATE_TRANSMISSIONS = {
-    CfcState.OFF: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE],
-    CfcState.STANDBY: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE],
-    CfcState.CAPTURE: [CfcState.OFF, CfcState.STANDBY, CfcState.CAPTURE, CfcState.ERROR],
-    CfcState.ERROR: [CfcState.OFF],
+    CameraState.OFF: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE],
+    CameraState.STANDBY: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE],
+    CameraState.CAPTURE: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE,
+                          CameraState.ERROR],
+    CameraState.ERROR: [CameraState.OFF],
 }
 
 
@@ -31,7 +43,7 @@ class CameraService(Service):
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
 
-        self._state = CfcState.OFF
+        self._state = CameraState.OFF
         self._last_capture = None
 
         self._pirt1280 = pirt1280
@@ -66,20 +78,20 @@ class CameraService(Service):
             logger.error(e)
             self.tec_disable()
             self._pirt1280.disable()
-            self._state = CfcState.OFF
+            self._state = CameraState.OFF
 
-    def _state_machine_transittion(self, new_state: CfcState or int):
+    def _state_machine_transittion(self, new_state: CameraState or int):
 
         if isinstance(new_state, int):
-            new_state = CfcState(new_state)
+            new_state = CameraState(new_state)
 
         if new_state not in STATE_TRANSMISSIONS[self._state]:
             logger.error(f'invalid state transistion {self._state.name} -> {new_state.name}')
             return
 
-        if new_state == CfcState.OFF:
+        if new_state == CameraState.OFF:
             self._pirt1280.disable()
-        elif new_state in list(CfcState):
+        elif new_state in list(CameraState):
             self._pirt1280.enable()
             self._count = 0
 
@@ -88,20 +100,20 @@ class CameraService(Service):
 
     def on_loop(self):
 
-        if self._state == CfcState.OFF:
+        if self._state == CameraState.OFF:
             self.sleep(1)
-        elif self._state == CfcState.STANDBY:
+        elif self._state == CameraState.STANDBY:
             self.sleep(1)
-        elif self._state == CfcState.CAPTURE:
+        elif self._state == CameraState.CAPTURE:
             self._count += 1
             self._capture()
             if self._capture_count_obj.value != 0 and \
                     self._count >= self._capture_count_obj.value:
-                self._state_machine_transittion(CfcState.STANDBY)
+                self._state_machine_transittion(CameraState.STANDBY)
             else:
                 self.sleep(self._capture_delay_obj.value / 1000)
         else:
-            self._state = CfcState.OFF
+            self._state = CameraState.OFF
 
     def _capture(self, count: int = 1):
         '''Capture x raw images in a row with no delay and save them to fread cache'''

@@ -1,3 +1,10 @@
+'''
+The TEC (termalelectric cooler) controller service.
+
+Seperate from the camera service as the camera can be used regaurdless if the TEC is enabled or
+not.
+'''
+
 from simple_pid import PID
 from olaf import Service, logger
 
@@ -5,16 +12,8 @@ from ..drivers.pirt1280 import Pirt1280
 from ..drivers.rc625 import Rc625
 
 
-class TecService(Service):
+class TecControllerService(Service):
     '''Service for controlling and monitoring the TEC (thermalelectic cooler).'''
-
-    SATURATION_DIFF = 6
-    '''
-    the difference between the current temp and the setpoint at which the TEC is
-    considered saturated and therefore should be disabled. Note that it would
-    only be considered saturated after it first crossed below the saturation
-    and then came above it as the TEC because saturated with heat.
-    '''
 
     def __init__(self, pirt1280: Pirt1280, rc6_25: Rc625):
         super().__init__()
@@ -36,12 +35,15 @@ class TecService(Service):
         self._samples = []
         self._num_samples = 20
 
+        self._saturation_diff_obj = None
+
         self.tec_index = 0x6002
 
     def on_start(self):
 
         self.node.add_sdo_read_callback(self.tec_index, self.on_tec_read)
         self.node.add_sdo_write_callback(self.tec_index, self.on_tec_write)
+        self._saturation_diff_obj = self.node.od[0x6002][0x5]
 
     def on_stop(self):
 
@@ -66,6 +68,7 @@ class TecService(Service):
     def on_loop(self) -> bool:
 
         if self._camera.is_enabled and self._tec_ctrl_enable:
+
             # sample the temp and get the PID correction
             current_temp = self._camera.temperature
             diff = self._pid(current_temp)
@@ -74,7 +77,7 @@ class TecService(Service):
             avg = self._get_moving_average(current_temp)
 
             # calculate the saturation point based on the setpoint
-            saturation_pt = self._pid.setpoint + self.SATURATION_DIFF
+            saturation_pt = self._pid.setpoint + self._saturation_diff_obj.value
 
             # if the average goes below the saturation point since enabled, flag it
             if avg <= saturation_pt:
@@ -97,7 +100,6 @@ class TecService(Service):
         self.sleep(0.5)
 
     def on_loop_error(self, error: Exception):
-        '''on_loop() raised an unexpected error'''
 
         logger.critical('disabling TEC due to unexpected error with tec loop')
         logger.error(error)
