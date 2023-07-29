@@ -66,19 +66,9 @@ class CameraService(Service):
         self.node.add_sdo_read_callback(self.test_camera_index, self.on_test_camera_read)
         self.node.add_sdo_write_callback(self.test_camera_index, self.on_test_camera_write)
 
-    def on_end(self):
+    def on_stop(self):
 
         self._pirt1280.disable()
-
-    def state_machine_loop(self):
-
-        try:
-            self._state_machine_loop
-        except Exception as e:
-            logger.error(e)
-            self.tec_disable()
-            self._pirt1280.disable()
-            self._state = CameraState.OFF
 
     def _state_machine_transittion(self, new_state: CameraState or int):
 
@@ -89,7 +79,7 @@ class CameraService(Service):
             logger.error(f'invalid state transistion {self._state.name} -> {new_state.name}')
             return
 
-        if new_state == CameraState.OFF:
+        if new_state in [CameraState.OFF, CameraState.ERROR]:
             self._pirt1280.disable()
         elif new_state in list(CameraState):
             self._pirt1280.enable()
@@ -115,10 +105,15 @@ class CameraService(Service):
         else:
             self._state = CameraState.OFF
 
+    def on_loop_error(self, error: Exception):
+
+        logger.exception(error)
+        self._state_machine_transittion(CameraState.ERROR)
+
     def _capture(self, count: int = 1):
         '''Capture x raw images in a row with no delay and save them to fread cache'''
 
-        logger.debug('new capture')
+        logger.info('capture')
         dt = time()
         self._last_capture = self._pirt1280.capture()
         metadata = {
@@ -137,8 +132,6 @@ class CameraService(Service):
             dtype=data.dtype,
             metadata=metadata,
             photometric='miniswhite',
-            # compression='zstd',
-            # compressionargs={'level': 1}  # images do not compress well
         )
 
         self.node.fread_cache.add(file_name, consume=True)
