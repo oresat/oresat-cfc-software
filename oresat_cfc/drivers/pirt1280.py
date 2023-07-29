@@ -91,7 +91,7 @@ class Pirt1280:
 
         self._gpio_num = gpio_num
         self._mock = mock
-        self._adc = Adc(adc_pin, mock=True)
+        self._adc = Adc(adc_pin, mock)
         self._gpio = Gpio(gpio_num, mock=mock)
         self._integration_time = None  # reduce IO calls
 
@@ -307,7 +307,7 @@ class Pirt1280:
     def temperature(self) -> float:
         '''float: The temperature of the sensor.'''
 
-        samples: int = 10
+        samples = 10
 
         samples_sum = 0
         for i in range(samples):

@@ -21,6 +21,7 @@ class TecService(Service):
 
         self._pirt1280 = pirt1280
         self._tec = tec
+        self._tec_ctrl_enable = False
         self._tec.disable()
 
         self._pid = PID(0.5, 0.0, 0.1)
@@ -64,28 +65,32 @@ class TecService(Service):
 
     def on_loop(self) -> bool:
 
-        # sample the temp and get the PID correction
-        current_temp = self._pirt1280.temperature
-        diff = self._pid(current_temp)
+        if self._pirt1280.is_enabled and self._tec_ctrl_enable:
+            # sample the temp and get the PID correction
+            current_temp = self._pirt1280.temperature
+            diff = self._pid(current_temp)
 
-        # get the moving average
-        avg = self._get_moving_average(current_temp)
+            # get the moving average
+            avg = self._get_moving_average(current_temp)
 
-        # calculate the saturation point based on the setpoint
-        saturation_pt = self._pid.setpoint + self.SATURATION_DIFF
+            # calculate the saturation point based on the setpoint
+            saturation_pt = self._pid.setpoint + self.SATURATION_DIFF
 
-        # if the average goes below the saturation point since enabled, flag it
-        if avg <= saturation_pt:
-            self._past_saturation_pt_since_enable = True
+            # if the average goes below the saturation point since enabled, flag it
+            if avg <= saturation_pt:
+                self._past_saturation_pt_since_enable = True
 
-        # if the average goes above the saturation point, after going below it,
-        # since enabled, then the TEC is probably saturated so disable it
-        if avg > saturation_pt and self._past_saturation_pt_since_enable:
-            self._saturated = True
+            # if the average goes above the saturation point, after going below it,
+            # since enabled, then the TEC is probably saturated so disable it
+            if avg > saturation_pt and self._past_saturation_pt_since_enable:
+                logger.info('TEC saturated')
+                self._saturated = True
 
-        # drive the TEC power based on the PID output
-        if not self._saturated and diff >= 0:
-            self._tec.enable()
+            # drive the TEC power based on the PID output
+            if not self._saturated and diff < 0:
+                self._tec.enable()
+            else:
+                self._tec.disable()
         else:
             self._tec.disable()
 
@@ -111,7 +116,7 @@ class TecService(Service):
         ret = None
 
         if subindex == 0x1:
-            ret = self._tec.is_enabled
+            ret = self._tec_ctrl_enable
         elif subindex == 0x2:
             ret = self._saturated
         elif subindex == 0x3:
@@ -126,9 +131,11 @@ class TecService(Service):
             return
 
         if subindex == 0x1:
+            self._tec_ctrl_enable = value
             if value:
-                self._tec.enable()
+                logger.info('enabling TEC controller')
             else:
+                logger.info('disabling TEC controller')
                 self._tec.disable()
         elif subindex == 0x3:
             self._pid.setpoint = value
