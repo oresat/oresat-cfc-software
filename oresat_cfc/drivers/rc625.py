@@ -1,7 +1,8 @@
 from olaf import Gpio
 
 
-class Tec:
+class Rc625:
+    '''RC6-2.5 thermalelctric cooler'''
 
     def __init__(self, gpio_num: int, mock: bool = False):
 

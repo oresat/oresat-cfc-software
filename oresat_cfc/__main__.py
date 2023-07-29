@@ -3,8 +3,8 @@ import os
 from olaf import app, rest_api, olaf_setup, olaf_run, render_olaf_template
 
 from .drivers.pirt1280 import Pirt1280
-from .drivers.tec import Tec
-from .services.pirt1280 import Pirt1280Service
+from .drivers.rc625 import Rc625
+from .services.camera import CameraService
 from .services.tec import TecService
 
 
@@ -30,10 +30,10 @@ def main():
 
     pirt1280 = Pirt1280(camera_spi_bus, camera_spi_device, camera_enable_pin, camera_adc_num,
                         mock_camera)
-    tec = Tec(tec_enable_pin, mock_tec)
+    rc6_25 = Rc625(tec_enable_pin, mock_tec)
 
-    app.add_service(Pirt1280Service(pirt1280))
-    app.add_service(TecService(pirt1280, tec))
+    app.add_service(CameraService(pirt1280))
+    app.add_service(TecService(pirt1280, rc6_25))
 
     rest_api.add_template(f'{path}/templates/cfc.html')
 

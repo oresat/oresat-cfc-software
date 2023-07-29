@@ -2,7 +2,7 @@ from simple_pid import PID
 from olaf import Service, logger
 
 from ..drivers.pirt1280 import Pirt1280
-from ..drivers.tec import Tec
+from ..drivers.rc625 import Rc625
 
 
 class TecService(Service):
@@ -16,11 +16,11 @@ class TecService(Service):
     and then came above it as the TEC because saturated with heat.
     '''
 
-    def __init__(self, pirt1280: Pirt1280, tec: Tec):
+    def __init__(self, pirt1280: Pirt1280, rc6_25: Rc625):
         super().__init__()
 
-        self._pirt1280 = pirt1280
-        self._tec = tec
+        self._camera = pirt1280
+        self._tec = rc6_25
         self._tec_ctrl_enable = False
         self._tec.disable()
 
@@ -65,9 +65,9 @@ class TecService(Service):
 
     def on_loop(self) -> bool:
 
-        if self._pirt1280.is_enabled and self._tec_ctrl_enable:
+        if self._camera.is_enabled and self._tec_ctrl_enable:
             # sample the temp and get the PID correction
-            current_temp = self._pirt1280.temperature
+            current_temp = self._camera.temperature
             diff = self._pid(current_temp)
 
             # get the moving average

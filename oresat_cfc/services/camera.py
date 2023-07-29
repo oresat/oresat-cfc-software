@@ -25,7 +25,7 @@ STATE_TRANSMISSIONS = {
 }
 
 
-class Pirt1280Service(Service):
+class CameraService(Service):
     '''Service for camera and capture state machine'''
 
     def __init__(self, pirt1280: Pirt1280):
@@ -89,9 +89,9 @@ class Pirt1280Service(Service):
     def on_loop(self):
 
         if self._state == CfcState.OFF:
-            self._event.wait(1)
+            self.sleep(1)
         elif self._state == CfcState.STANDBY:
-            self._event.wait(1)
+            self.sleep(1)
         elif self._state == CfcState.CAPTURE:
             self._count += 1
             self._capture()
@@ -99,7 +99,7 @@ class Pirt1280Service(Service):
                     self._count >= self._capture_count_obj.value:
                 self._state_machine_transittion(CfcState.STANDBY)
             else:
-                self._event.wait(self._capture_delay_obj.value / 1000)
+                self.sleep(self._capture_delay_obj.value / 1000)
         else:
             self._state = CfcState.OFF
 
