@@ -13,7 +13,11 @@ from ..drivers.rc625 import Rc625
 
 
 class TecControllerService(Service):
-    '''Service for controlling and monitoring the TEC (thermalelectic cooler).'''
+    '''
+    Service for controlling and monitoring the TEC (thermalelectic cooler).
+
+    Uses PID (Proportional–Integral–Derivative) controller for the TEC.
+    '''
 
     def __init__(self, pirt1280: Pirt1280, rc6_25: Rc625):
         super().__init__()

@@ -1,3 +1,5 @@
+'''The RC6-2.5 thermalelctric cooler driver'''
+
 from olaf import Gpio
 
 

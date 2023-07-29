@@ -6,6 +6,10 @@ Like all OreSat software projects it is built using OLAF (OreSat Linux App
 Framework), which it built ontop of [CANopen for Python]. See the
 [oresat-olaf repo] for more info about OLAF.
 
+When this project is running on the real hardware it will required the
+`prucam-pirt1280` kernel module.
+See https://github.com/oresat/oresat-prucam-pirt1280 for more info.
+
 ## Quickstart
 
 Install dependenies
@@ -33,6 +37,7 @@ Can mock hardware by using the `-m HARDWARE` flag.
 - The`-m all` flag can be used to mock all hardware (CAN bus is always
 required).
 - The `-m camera` flag would only mock the camera
+- The `-m tec` flag would only mock the TEC
 
 See other options with `-h` flag.
 

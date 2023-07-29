@@ -1,5 +1,5 @@
 '''
-The PIRT1280 camera driver.
+The PIRT1280 SWIR (short-wave infrared) camera driver.
 '''
 
 import io
@@ -51,7 +51,7 @@ class Pirt1280Register(IntEnum):
 
 
 class Pirt1280:
-    '''The PIRT1280 camera'''
+    '''The PIRT1280 SWIR camera'''
 
     COLS = 1280
     ROWS = 1024
