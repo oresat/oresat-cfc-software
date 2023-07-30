@@ -4305,16 +4305,16 @@ AccessType=rw
 DefaultValue=1
 
 [6002]
-ParameterName=TEC
+ParameterName=TEC controller
 ObjectType=0x09
-SubNumber=6
+SubNumber=10
 
 [6002sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x05
+DefaultValue=0x09
 
 ;TEC is enabled/disabled.
 [6002sub1]
@@ -4325,6 +4325,9 @@ AccessType=rw
 DefaultValue=0
 PDOMapping=1
 
+;flags whether the TEC temperature is saturated. This is defined by the
+;TEC first going below zero after being enabled, and then going above zero
+;again when the TEC cannot maintain the temperature differential.
 [6002sub2]
 ParameterName=Saturated
 ObjectType=0x07
@@ -4339,7 +4342,7 @@ ParameterName=Target temperature
 ObjectType=0x07
 DataType=0x0002
 AccessType=rw
-DefaultValue=0
+DefaultValue=10
 PDOMapping=1
 
 ;The GPIO pin used to enable/disable the TEC
@@ -4360,6 +4363,38 @@ ObjectType=0x07
 DataType=0x0005
 AccessType=rw
 DefaultValue=6
+
+;The proportional to the current value of the SP − PV error value
+[6002sub6]
+ParameterName=PID proportional
+ObjectType=0x07
+DataType=0x0008
+AccessType=const
+DefaultValue=0.5
+
+;This value accounts for past values of the SP − PV error and integrates them over time
+[6002sub7]
+ParameterName=PID integral
+ObjectType=0x07
+DataType=0x0008
+AccessType=const
+DefaultValue=0.0
+
+;The best estimate of the future trend of the SP − PV error, based on its current rate of change
+[6002sub8]
+ParameterName=PID derivative
+ObjectType=0x07
+DataType=0x0008
+AccessType=const
+DefaultValue=0.1
+
+;The PID sample delay in ms
+[6002sub9]
+ParameterName=PID sample delay
+ObjectType=0x07
+DataType=0x0007
+AccessType=rw
+DefaultValue=250
 
 [7000]
 ParameterName=Test camera

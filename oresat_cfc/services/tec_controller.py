@@ -16,7 +16,7 @@ class TecControllerService(Service):
     '''
     Service for controlling and monitoring the TEC (thermalelectic cooler).
 
-    Uses PID (Proportional–Integral–Derivative) controller for the TEC.
+    Uses a PID (Proportional–Integral–Derivative) controller for the TEC.
     '''
 
     def __init__(self, pirt1280: Pirt1280, rc6_25: Rc625):
@@ -25,21 +25,13 @@ class TecControllerService(Service):
         self._camera = pirt1280
         self._tec = rc6_25
         self._tec_ctrl_enable = False
-        self._tec.disable()
+        self._tec.disable()  # make sure this is disable by default
 
-        self._pid = PID(0.5, 0.0, 0.1)
-        self._pid.setpoint = 10  # aka the target temp
-
-        # flags whether the TEC temperature is saturated. This is defined by the
-        # TEC first going below zero after being enabled, and then going above zero
-        # again when the TEC cannot maintain the temperature differential
-        self._saturated = False
+        self._pid = None
 
         self._past_saturation_pt_since_enable = False
         self._samples = []
         self._num_samples = 20
-
-        self._saturation_diff_obj = None
 
         self.tec_index = 0x6002
 
@@ -47,7 +39,20 @@ class TecControllerService(Service):
 
         self.node.add_sdo_read_callback(self.tec_index, self.on_tec_read)
         self.node.add_sdo_write_callback(self.tec_index, self.on_tec_write)
+
+        self._controller_enable_obj = self.node.od[0x6002][0x1]
+        self._controller_enable_obj.value = False  # make sure this is disable by default
+        self._saturated_obj = self.node.od[0x6002][0x2]
+        self._saturated_obj.value = False  # make sure this is False by default
         self._saturation_diff_obj = self.node.od[0x6002][0x5]
+        self._pid_delay_obj = self.node.od[0x6002][0x9]
+
+        self._pid = PID(
+            self.node.od[0x6002][0x6].value,
+            self.node.od[0x6002][0x7].value,
+            self.node.od[0x6002][0x8].value
+        )
+        self._pid.setpoint = self.node.od[0x6002][0x3].value
 
     def on_stop(self):
 
@@ -71,7 +76,7 @@ class TecControllerService(Service):
 
     def on_loop(self) -> bool:
 
-        if self._camera.is_enabled and self._tec_ctrl_enable:
+        if self._camera.is_enabled and self._controller_enable_obj.value:
 
             # sample the temp and get the PID correction
             current_temp = self._camera.temperature
@@ -84,24 +89,28 @@ class TecControllerService(Service):
             saturation_pt = self._pid.setpoint + self._saturation_diff_obj.value
 
             # if the average goes below the saturation point since enabled, flag it
-            if avg <= saturation_pt:
+            if avg <= saturation_pt and not self._past_saturation_pt_since_enable:
+                logger.info('TEC has reached target temperature')
                 self._past_saturation_pt_since_enable = True
 
             # if the average goes above the saturation point, after going below it,
             # since enabled, then the TEC is probably saturated so disable it
             if avg > saturation_pt and self._past_saturation_pt_since_enable:
                 logger.info('TEC saturated')
-                self._saturated = True
+                self._saturated_obj.value = True
+
+            logger.debug(f'target: {self._pid.setpoint} / current: {current_temp} / PID diff: '
+                         f'{diff} / avg: {avg}')
 
             # drive the TEC power based on the PID output
-            if not self._saturated and diff < 0:
+            if not self._saturated_obj.value and diff < 0:
                 self._tec.enable()
             else:
                 self._tec.disable()
         else:
             self._tec.disable()
 
-        self.sleep(0.5)
+        self.sleep(self._pid_delay_obj.value * 1000)
 
     def on_loop_error(self, error: Exception):
 
@@ -116,19 +125,8 @@ class TecControllerService(Service):
     def on_tec_read(self, index: int, subindex: int):
         '''SDO read on the camera obj'''
 
-        if index != self.tec_index:
-            return
-
-        ret = None
-
-        if subindex == 0x1:
-            ret = self._tec_ctrl_enable
-        elif subindex == 0x2:
-            ret = self._saturated
-        elif subindex == 0x3:
-            ret = self._pid.setpoint
-
-        return ret
+        if index == self.tec_index and subindex == 0x3:
+            return self._pid.setpoint
 
     def on_tec_write(self, index: int, subindex: int, value):
         '''SDO read on the camera obj'''
@@ -137,7 +135,7 @@ class TecControllerService(Service):
             return
 
         if subindex == 0x1:
-            self._tec_ctrl_enable = value
+            self._controller_enable_obj.value = value
             if value:
                 logger.info('enabling TEC controller')
             else:

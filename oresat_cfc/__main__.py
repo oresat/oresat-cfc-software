@@ -26,7 +26,7 @@ def main():
     camera_spi_device = app._od['Camera']['SPI device'].value
     camera_enable_pin = app._od['Camera']['Enable gpio pin'].value
     camera_adc_num = app._od['Camera']['ADC pin'].value
-    tec_enable_pin = app._od['TEC']['Enable gpio pin'].value
+    tec_enable_pin = app._od['TEC controller']['Enable gpio pin'].value
 
     pirt1280 = Pirt1280(camera_spi_bus, camera_spi_device, camera_enable_pin, camera_adc_num,
                         mock_camera)
