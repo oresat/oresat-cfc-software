@@ -31,7 +31,7 @@ class TecControllerService(Service):
 
         self._past_saturation_pt_since_enable = False
         self._samples = []
-        self._num_samples = 20
+        self._lowest_temp = 100  # something high by default
 
         self.tec_index = 0x6002
 
@@ -40,19 +40,22 @@ class TecControllerService(Service):
         self.node.add_sdo_read_callback(self.tec_index, self.on_tec_read)
         self.node.add_sdo_write_callback(self.tec_index, self.on_tec_write)
 
-        self._controller_enable_obj = self.node.od[0x6002][0x1]
+        tec_controller_rec = self.node.od[0x6002]
+        self._controller_enable_obj = tec_controller_rec[0x1]
         self._controller_enable_obj.value = False  # make sure this is disable by default
-        self._saturated_obj = self.node.od[0x6002][0x2]
+        self._saturated_obj = tec_controller_rec[0x2]
         self._saturated_obj.value = False  # make sure this is False by default
-        self._saturation_diff_obj = self.node.od[0x6002][0x5]
-        self._pid_delay_obj = self.node.od[0x6002][0x9]
+        self._saturation_diff_obj = tec_controller_rec[0x5]
+        self._pid_delay_obj = tec_controller_rec[0x9]
+        self._cooldown_temp_obj = tec_controller_rec[0xA]
+        self._mv_avg_samples_obj = tec_controller_rec[0xB]
 
         self._pid = PID(
-            self.node.od[0x6002][0x6].value,
-            self.node.od[0x6002][0x7].value,
-            self.node.od[0x6002][0x8].value
+            tec_controller_rec[0x6].value,
+            tec_controller_rec[0x7].value,
+            tec_controller_rec[0x8].value
         )
-        self._pid.setpoint = self.node.od[0x6002][0x3].value
+        self._pid.setpoint = tec_controller_rec[0x3].value
 
     def on_stop(self):
 
@@ -65,7 +68,7 @@ class TecControllerService(Service):
         '''
 
         # pop the oldest sample if we have the max number of samples
-        if len(self._samples) >= self._num_samples:
+        if len(self._samples) >= self._mv_avg_samples_obj.value:
             self._samples.pop(0)
 
         # add the latest sample to the list
@@ -76,41 +79,44 @@ class TecControllerService(Service):
 
     def on_loop(self) -> bool:
 
-        if self._camera.is_enabled and self._controller_enable_obj.value:
+        self.sleep(self._pid_delay_obj.value / 1000)
 
-            # sample the temp and get the PID correction
-            current_temp = self._camera.temperature
-            diff = self._pid(current_temp)
+        if not self._camera.is_enabled or not self._controller_enable_obj.value:
+            self._tec.disable()
+            return
 
-            # get the moving average
-            avg = self._get_moving_average(current_temp)
+        current_temp = self._camera.temperature
+        diff = self._pid(current_temp)
+        mv_avg = self._get_moving_average(current_temp)
 
-            # calculate the saturation point based on the setpoint
-            saturation_pt = self._pid.setpoint + self._saturation_diff_obj.value
+        if current_temp < self._lowest_temp:
+            self._lowest_temp = current_temp
 
-            # if the average goes below the saturation point since enabled, flag it
-            if avg <= saturation_pt and not self._past_saturation_pt_since_enable:
-                logger.info('TEC has reached target temperature')
-                self._past_saturation_pt_since_enable = True
+        logger.debug(f'target: {self._pid.setpoint} / current: {current_temp} / '
+                     f'lowest: {self._lowest_temp} / mv avg: {mv_avg} / PID diff: {diff}')
 
-            # if the average goes above the saturation point, after going below it,
-            # since enabled, then the TEC is probably saturated so disable it
-            if avg > saturation_pt and self._past_saturation_pt_since_enable:
-                logger.info('TEC saturated')
-                self._saturated_obj.value = True
+        if current_temp >= self._cooldown_temp_obj.value:
+            self._tec.disable()
+            return  # don't even try to control the TEC
 
-            logger.debug(f'target: {self._pid.setpoint} / current: {current_temp} / PID diff: '
-                         f'{diff} / avg: {avg}')
+        saturation_pt = self._lowest_temp + self._saturation_diff_obj.value
 
-            # drive the TEC power based on the PID output
-            if not self._saturated_obj.value and diff < 0:
-                self._tec.enable()
-            else:
-                self._tec.disable()
+        # if the average goes below the saturation point since enabled, flag it
+        if mv_avg <= saturation_pt and not self._past_saturation_pt_since_enable:
+            logger.info('TEC has reached target temperature')
+            self._past_saturation_pt_since_enable = True
+
+        # if the average goes above the saturation point, after going below it,
+        # since enabled, then the TEC is probably saturated so disable it
+        if mv_avg > saturation_pt and self._past_saturation_pt_since_enable:
+            logger.info('TEC saturated')
+            self._saturated_obj.value = True
+
+        # drive the TEC power based on the PID output
+        if not self._saturated_obj.value and diff < 0:
+            self._tec.enable()
         else:
             self._tec.disable()
-
-        self.sleep(self._pid_delay_obj.value * 1000)
 
     def on_loop_error(self, error: Exception):
 
@@ -135,6 +141,12 @@ class TecControllerService(Service):
             return
 
         if subindex == 0x1:
+            if value and self._controller_enable_obj.value is False:
+                # reset these on an enable, if currently disabled
+                self._past_saturation_pt_since_enable = False
+                self._saturated_obj.value = False
+                self._lowest_temp = 100
+
             self._controller_enable_obj.value = value
             if value:
                 logger.info('enabling TEC controller')

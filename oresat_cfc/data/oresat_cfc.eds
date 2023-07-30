@@ -4296,14 +4296,14 @@ DefaultValue=1
 [6002]
 ParameterName=TEC controller
 ObjectType=0x09
-SubNumber=10
+SubNumber=12
 
 [6002sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x09
+DefaultValue=0x0B
 
 ;TEC is enabled/disabled.
 [6002sub1]
@@ -4384,6 +4384,24 @@ ObjectType=0x07
 DataType=0x0007
 AccessType=rw
 DefaultValue=250
+
+;When the temperature of camera  is above this point, the TEC will never be enabled.
+;This is to help let the TEC cooldown post saturation, before starting the TEC again.
+;Temperature is in celsius.
+[6002subA]
+ParameterName=Cooldown temperature
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=40
+
+;Number of samples to use for the moving average to figuring out if the TEC is saturated
+[6002subB]
+ParameterName=Moving avg samples
+ObjectType=0x07
+DataType=0x0005
+AccessType=rw
+DefaultValue=4
 
 [7000]
 ParameterName=Test camera
