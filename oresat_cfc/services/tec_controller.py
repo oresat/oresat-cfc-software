@@ -46,7 +46,7 @@ class TecControllerService(Service):
         self._saturated_obj = tec_controller_rec[0x2]
         self._saturated_obj.value = False  # make sure this is False by default
         self._saturation_diff_obj = tec_controller_rec[0x5]
-        self._pid_delay_obj = tec_controller_rec[0x9]
+        self._pid_delay_ms_obj = tec_controller_rec[0x9]
         self._cooldown_temp_obj = tec_controller_rec[0xA]
         self._mv_avg_samples_obj = tec_controller_rec[0xB]
 
@@ -79,8 +79,9 @@ class TecControllerService(Service):
 
     def on_loop(self) -> bool:
 
-        self.sleep(self._pid_delay_obj.value / 1000)
+        self.sleep(self._pid_delay_ms_obj.value / 1000)
 
+        # only run tec controller alg when the camera and TEC controller are both enabled
         if not self._camera.is_enabled or not self._controller_enable_obj.value:
             self._tec.disable()
             return
@@ -89,15 +90,17 @@ class TecControllerService(Service):
         diff = self._pid(current_temp)
         mv_avg = self._get_moving_average(current_temp)
 
+        # update the lowest temperature
         if current_temp < self._lowest_temp:
             self._lowest_temp = current_temp
 
         logger.debug(f'target: {self._pid.setpoint} / current: {current_temp} / '
                      f'lowest: {self._lowest_temp} / mv avg: {mv_avg} / PID diff: {diff}')
 
+        # don't even try to control the TEC if above the cooldown temperature
         if current_temp >= self._cooldown_temp_obj.value:
             self._tec.disable()
-            return  # don't even try to control the TEC
+            return
 
         saturation_pt = self._lowest_temp + self._saturation_diff_obj.value
 
@@ -120,13 +123,15 @@ class TecControllerService(Service):
 
     def on_loop_error(self, error: Exception):
 
-        logger.critical('disabling TEC due to unexpected error with tec loop')
-        logger.error(error)
+        logger.critical('disabling TEC due to unexpected error with TEC controller loop')
+        logger.exception(error)
 
         try:
             self._tec.disable()
         except Exception:
-            logger.critical('failed to disable tec')
+            logger.critical('failed to disable the TEC')
+
+        self._controller_enable_obj.value = False
 
     def on_tec_read(self, index: int, subindex: int):
         '''SDO read on the camera obj'''
