@@ -113,6 +113,7 @@ class TecControllerService(Service):
         # since enabled, then the TEC is probably saturated so disable it
         if mv_avg > saturation_pt and self._past_saturation_pt_since_enable:
             logger.info('TEC is saturated')
+            self._controller_enable = False
             self._saturated_obj.value = True
             # handles case shere user moves the setpoint around a lot
             self._past_saturation_pt_since_enable = True
