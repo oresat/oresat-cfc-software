@@ -24,7 +24,6 @@ class TecControllerService(Service):
 
         self._camera = pirt1280
         self._tec = rc6_25
-        self._tec_ctrl_enable = False
         self._tec.disable()  # make sure this is disable by default
 
         self._pid = None
@@ -32,6 +31,7 @@ class TecControllerService(Service):
         self._past_saturation_pt_since_enable = False
         self._samples = []
         self._lowest_temp = 100  # something high by default
+        self._controller_enable = False
 
         self.tec_index = 0x6002
 
@@ -41,8 +41,6 @@ class TecControllerService(Service):
         self.node.add_sdo_write_callback(self.tec_index, self.on_tec_write)
 
         tec_controller_rec = self.node.od[0x6002]
-        self._controller_enable_obj = tec_controller_rec[0x1]
-        self._controller_enable_obj.value = False  # make sure this is disable by default
         self._saturated_obj = tec_controller_rec[0x2]
         self._saturated_obj.value = False  # make sure this is False by default
         self._saturation_diff_obj = tec_controller_rec[0x5]
@@ -82,7 +80,7 @@ class TecControllerService(Service):
         self.sleep(self._pid_delay_ms_obj.value / 1000)
 
         # only run tec controller alg when the camera and TEC controller are both enabled
-        if not self._camera.is_enabled or not self._controller_enable_obj.value:
+        if not self._camera.is_enabled or not self._controller_enable:
             self._tec.disable()
             return
 
@@ -99,7 +97,9 @@ class TecControllerService(Service):
 
         # don't even try to control the TEC if above the cooldown temperature
         if current_temp >= self._cooldown_temp_obj.value:
-            self._tec.disable()
+            logger.info('current temperature is above cooldown temperature, disabling TEC '
+                        'controller')
+            self._controller_enable = False
             return
 
         saturation_pt = self._lowest_temp + self._saturation_diff_obj.value
@@ -114,6 +114,8 @@ class TecControllerService(Service):
         if mv_avg > saturation_pt and self._past_saturation_pt_since_enable:
             logger.info('TEC saturated')
             self._saturated_obj.value = True
+            # handles case shere user moves the setpoint around a lot
+            self._past_saturation_pt_since_enable = True
 
         # drive the TEC power based on the PID output
         if not self._saturated_obj.value and diff < 0:
@@ -131,13 +133,22 @@ class TecControllerService(Service):
         except Exception:
             logger.critical('failed to disable the TEC')
 
-        self._controller_enable_obj.value = False
+        self._controller_enable = False
 
     def on_tec_read(self, index: int, subindex: int):
         '''SDO read on the camera obj'''
 
-        if index == self.tec_index and subindex == 0x3:
-            return self._pid.setpoint
+        ret = None
+
+        if index == self.tec_index:
+            return ret
+
+        if subindex == 0x1:
+            ret = self._controller_enable
+        elif subindex == 0x3:
+            ret = self._pid.setpoint
+
+        return ret
 
     def on_tec_write(self, index: int, subindex: int, value):
         '''SDO read on the camera obj'''
@@ -146,17 +157,14 @@ class TecControllerService(Service):
             return
 
         if subindex == 0x1:
-            if value and self._controller_enable_obj.value is False:
+            if value and not self._controller_enable:
                 # reset these on an enable, if currently disabled
+                logger.info('enabling TEC controller')
                 self._past_saturation_pt_since_enable = False
                 self._saturated_obj.value = False
                 self._lowest_temp = 100
-
-            self._controller_enable_obj.value = value
-            if value:
-                logger.info('enabling TEC controller')
-            else:
+            elif not value and self._controller_enable:
                 logger.info('disabling TEC controller')
-                self._tec.disable()
+            self._controller_enable = value
         elif subindex == 0x3:
             self._pid.setpoint = value
