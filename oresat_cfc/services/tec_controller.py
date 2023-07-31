@@ -106,13 +106,13 @@ class TecControllerService(Service):
 
         # if the average goes below the saturation point since enabled, flag it
         if mv_avg <= saturation_pt and not self._past_saturation_pt_since_enable:
-            logger.info('TEC has reached target temperature')
+            logger.info('TEC has past saturation point toward target temperature')
             self._past_saturation_pt_since_enable = True
 
         # if the average goes above the saturation point, after going below it,
         # since enabled, then the TEC is probably saturated so disable it
         if mv_avg > saturation_pt and self._past_saturation_pt_since_enable:
-            logger.info('TEC saturated')
+            logger.info('TEC is saturated')
             self._saturated_obj.value = True
             # handles case shere user moves the setpoint around a lot
             self._past_saturation_pt_since_enable = True
