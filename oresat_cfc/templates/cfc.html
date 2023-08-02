@@ -232,10 +232,6 @@
       a.click();
     }
 
-    async function getState() {
-      const state = await readValue("0x6000", "0x1")
-    }
-
     const STATES = {
       0x01: "OFF",
       0x02: "STANDBY",
@@ -243,11 +239,11 @@
       0xFF: "ERROR",
     };
 
-    /** Capture an image */
-    async function takeCapture() {
+    /** Update all info / data being displayed */
+    async function update() {
       let obj;
 
-      // take display image capture
+      // get last image capture
       obj = await readValue("0x7000", "0x2");
       lastDisplayImage = obj.value;
       document.getElementById("image").src = "data:image/jpg;base64, " + obj.value;
@@ -283,9 +279,9 @@
       document.getElementById("tecTargetTemperature").innerHTML = obj.subindexes[3].value;
     }
 
-    takeCapture();
+    update();
     const interval = setInterval(function() {
-      takeCapture();
+      update();
     }, 2500);
   </script>
 {% endblock %}

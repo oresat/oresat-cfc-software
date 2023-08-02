@@ -1,10 +1,10 @@
-'''The RC6-2.5 thermalelctric cooler driver'''
+'''The RC6-2.5 thermoelctric cooler (TEC) driver'''
 
 from olaf import Gpio
 
 
 class Rc625:
-    '''RC6-2.5 thermalelctric cooler'''
+    '''RC6-2.5 thermoelctric cooler (TEC)'''
 
     def __init__(self, gpio_num: int, mock: bool = False):
 
