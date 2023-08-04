@@ -148,7 +148,7 @@ class Pirt1280:
     def is_enabled(self) -> bool:
         '''bool: Pirt1280 enabled.'''
 
-        return self._enable
+        return self._enabled
 
     def _read_8b_reg(self, reg: int) -> int:
         '''Read a 8-bit int from a register.'''
@@ -170,6 +170,11 @@ class Pirt1280:
         # wait a sec for it to apply
         sleep(self.READ_BACK_WAIT)
 
+        value_read = self._read_8b_reg(reg)
+
+        if value != value_read:
+            raise Pirt1280Error(f'readback to reg {reg} did not match {value} vs {value_read}')
+
     def _write_16b_reg(self, reg: int, value: int):
         '''Write a 16-bit int to a pair of registers.'''
 
@@ -188,6 +193,14 @@ class Pirt1280:
 
         # wait a sec for it to apply
         sleep(self.READ_BACK_WAIT)
+
+        reg0_read = self._read_8b_reg(reg0)
+        reg1_read = self._read_8b_reg(reg1)
+
+        value_read = int.from_bytes(bytes([reg0_read, reg1_read]), 'little')
+
+        if value != value_read:
+            raise Pirt1280Error(f'readback to regs {reg} did not match {value} vs {value_read}')
 
     def capture(self) -> bytes:
         '''
@@ -264,10 +277,28 @@ class Pirt1280:
         self._write_8b_reg(Pirt1280Register.IT2.value, irb[2])
         self._write_8b_reg(Pirt1280Register.IT3.value, irb[3])
 
+        self._integration_time = value
+
         # wait a sec for it to apply
         sleep(self.READ_BACK_WAIT)
 
-        self._integration_time = value
+        frb0 = self._read_8b_reg(Pirt1280Register.FT0.value)
+        frb1 = self._read_8b_reg(Pirt1280Register.FT1.value)
+        frb2 = self._read_8b_reg(Pirt1280Register.FT2.value)
+        frb3 = self._read_8b_reg(Pirt1280Register.FT3.value)
+
+        irb0 = self._read_8b_reg(Pirt1280Register.IT0.value)
+        irb1 = self._read_8b_reg(Pirt1280Register.IT1.value)
+        irb2 = self._read_8b_reg(Pirt1280Register.IT2.value)
+        irb3 = self._read_8b_reg(Pirt1280Register.IT3.value)
+
+        frb_read = int.from_bytes(bytes([frb0, frb1, frb2, frb3]), 'little')
+        irb_read = int.from_bytes(bytes([irb0, irb1, irb2, irb3]), 'little')
+
+        if frame_refclks != frb_read:
+            raise Pirt1280Error(f'readback to FT regs did not match {frame_refclks} vs {frb_read}')
+        if intr_refclks != irb_read:
+            raise Pirt1280Error(f'readback to IT regs did not match {intr_refclks} vs {irb_read}')
 
     def _get_temp(self) -> float:
         '''Get the raw temperature of the sensor.'''
