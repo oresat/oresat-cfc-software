@@ -31,7 +31,7 @@ class TecControllerService(Service):
         self._past_saturation_pt_since_enable = False
         self._samples = []
         self._lowest_temp = 100  # something high by default
-        self._controller_enable = False
+        self._controller_enabled = False
 
         self.tec_index = 0x6002
 
@@ -80,7 +80,7 @@ class TecControllerService(Service):
         self.sleep(self._pid_delay_ms_obj.value / 1000)
 
         # only run tec controller alg when the camera and TEC controller are both enabled
-        if not self._camera.is_enabled or not self._controller_enable:
+        if not self._camera.is_enabled or not self._controller_enabled:
             self._tec.disable()
             return
 
@@ -99,7 +99,7 @@ class TecControllerService(Service):
         if current_temp >= self._cooldown_temp_obj.value:
             logger.info('current temperature is above cooldown temperature, disabling TEC '
                         'controller')
-            self._controller_enable = False
+            self._controller_enabled = False
             return
 
         saturation_pt = self._lowest_temp + self._saturation_diff_obj.value
@@ -113,7 +113,7 @@ class TecControllerService(Service):
         # since enabled, then the TEC is probably saturated so disable it
         if mv_avg > saturation_pt and self._past_saturation_pt_since_enable:
             logger.info('TEC is saturated')
-            self._controller_enable = False
+            self._controller_enabled = False
             self._saturated_obj.value = True
             # handles case shere user moves the setpoint around a lot
             self._past_saturation_pt_since_enable = True
@@ -134,18 +134,18 @@ class TecControllerService(Service):
         except Exception:
             logger.critical('failed to disable the TEC')
 
-        self._controller_enable = False
+        self._controller_enabled = False
 
     def on_tec_read(self, index: int, subindex: int):
         '''SDO read on the camera obj'''
 
         ret = None
 
-        if index == self.tec_index:
+        if index != self.tec_index:
             return ret
 
         if subindex == 0x1:
-            ret = self._controller_enable
+            ret = self._controller_enabled
         elif subindex == 0x3:
             ret = self._pid.setpoint
 
@@ -158,14 +158,14 @@ class TecControllerService(Service):
             return
 
         if subindex == 0x1:
-            if value and not self._controller_enable:
+            if value and not self._controller_enabled:
                 # reset these on an enable, if currently disabled
                 logger.info('enabling TEC controller')
                 self._past_saturation_pt_since_enable = False
                 self._saturated_obj.value = False
                 self._lowest_temp = 100
-            elif not value and self._controller_enable:
+            elif not value and self._controller_enabled:
                 logger.info('disabling TEC controller')
-            self._controller_enable = value
+            self._controller_enabled = value
         elif subindex == 0x3:
             self._pid.setpoint = value
