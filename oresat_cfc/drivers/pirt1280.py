@@ -41,7 +41,7 @@ class Pirt1280Register(IntEnum):
     FT2 = 20
     FT3 = 21
     VHI = 26
-    VLO = 27
+    VLO = 28
     CONF0 = 38
     CONF1 = 39
     CONF2 = 40
@@ -104,7 +104,7 @@ class Pirt1280:
             self._pru0 = Pru(0)
             self._pru1 = Pru(1)
 
-        self._enable = False
+        self._enabled = False
 
     def __del__(self):
 
@@ -119,7 +119,7 @@ class Pirt1280:
             self._pru0.start()
             self._gpio.high()
 
-        self._enable = True
+        self._enabled = True
 
         sleep(self.READ_BACK_WAIT)
 
@@ -137,11 +137,11 @@ class Pirt1280:
         '''Disable the PIRT1280 (power it off).'''
 
         if not self._mock:
-            self._pru0.start()
-            self._pru1.start()
+            self._pru0.stop()
+            self._pru1.stop()
             self._gpio.low()
 
-        self._enable = False
+        self._enabled = False
         self._integration_time = None
 
     @property
