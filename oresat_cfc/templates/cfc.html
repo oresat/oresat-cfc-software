@@ -102,9 +102,9 @@
         <br>
         <label for="newState">State:</label>
         <select id="newState" name="newState">
-          <option>OFF</option>
-          <option>STANDBY</option>
-          <option>CAPTURE</option>
+          <option id="newStateOFF">OFF</option>
+          <option id="newStateSTANDBY">STANDBY</option>
+          <option id="newStateCAPTURE">CAPTURE</option>
         </select>
         <br>
         <br>
@@ -112,8 +112,8 @@
         <input id="newCapDelay" type="number" step="1">
         <br>
         <br>
-        <label for="newCapCount">Capture Count:</label>
-        <input id="newCapCount" type="number" step="1">
+        <label for="newCapAmount">Capture Amount:</label>
+        <input id="newCapAmount" type="number" step="1">
         <br>
         <br>
         <b>Camera</b>
@@ -155,16 +155,31 @@
         const intTimeObj = await readValue("0x6001", "0x7");
         const tecEnableObj = await readValue("0x6002", "0x1");
         const tecTargetTempObj = await readValue("0x6002", "0x3");
-        document.getElementById("newState").selectedIndex = stateObj.value - 1;
+        const state = stateObj.value;
+        const stateStr = STATES[state];
+
+        // change select options based off transistions
+        if (stateStr === "OFF") {
+          document.getElementById("newStateSTANDBY").disabled = false;
+          document.getElementById("newStateCAPTURE").disabled = true;
+        } else if (stateStr === "STANDBY" || stateStr === "CAPTURE") {
+          document.getElementById("newStateSTANDBY").disabled = false;
+          document.getElementById("newStateCAPTURE").disabled = false;
+        } else {
+          document.getElementById("newStateSTANDBY").disabled = true;
+          document.getElementById("newStateCAPTURE").disabled = true;
+        }
+
+        document.getElementById("newState").selectedIndex = state - 1;
         document.getElementById("newCapDelay").value = capDelayObj.value;
-        document.getElementById("newCapCount").value = capCountObj.value;
+        document.getElementById("newCapAmount").value = capCountObj.value;
         document.getElementById("newIntTime").value = Math.round(intTimeObj.value);
         document.getElementById("tecEnable").checked = tecEnableObj.value;
         document.getElementById("newTargetTemp").value = tecTargetTempObj.value;
       } else if (dialog.returnValue === "submit") {
         writeValue("0x6000", "0x1", document.getElementById("newState").selectedIndex + 1);
         writeValue("0x6000", "0x2", parseInt(document.getElementById("newCapDelay").value));
-        writeValue("0x6000", "0x3", parseInt(document.getElementById("newCapCount").value));
+        writeValue("0x6000", "0x3", parseInt(document.getElementById("newCapAmount").value));
         if (parseFloat(document.getElementById("newIntTime").value) > 0) {
           writeValue("0x6001", "0x7", parseFloat(document.getElementById("newIntTime").value));
         }

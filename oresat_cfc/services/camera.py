@@ -14,7 +14,7 @@ import numpy as np
 from olaf import Service, logger, new_oresat_file
 
 from .. import __version__
-from ..drivers.pirt1280 import Pirt1280, pirt1280_raw_to_numpy
+from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
 
 
 class CameraState(IntEnum):
@@ -29,11 +29,11 @@ class CameraState(IntEnum):
 
 
 STATE_TRANSMISSIONS = {
-    CameraState.OFF: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE],
+    CameraState.OFF: [CameraState.OFF, CameraState.STANDBY],
     CameraState.STANDBY: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE],
     CameraState.CAPTURE: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE,
                           CameraState.ERROR],
-    CameraState.ERROR: [CameraState.OFF],
+    CameraState.ERROR: [CameraState.OFF, CameraState.ERROR],
 }
 
 
@@ -45,6 +45,8 @@ class CameraService(Service):
 
         self._state = CameraState.OFF
         self._last_capture = None
+        self._next_state_internal = None
+        self._next_state_user = None
 
         self._pirt1280 = pirt1280
 
@@ -70,7 +72,12 @@ class CameraService(Service):
 
         self._pirt1280.disable()
 
-    def _state_machine_transittion(self, new_state: CameraState or int):
+    def _state_machine_transition(self, new_state: CameraState or int):
+        '''Transition from one state to another.'''
+
+        if new_state not in list(CameraState):
+            logger.error(f'invalid new state {new_state}')
+            return
 
         if isinstance(new_state, int):
             new_state = CameraState(new_state)
@@ -79,36 +86,55 @@ class CameraService(Service):
             logger.error(f'invalid state transistion {self._state.name} -> {new_state.name}')
             return
 
-        if new_state in [CameraState.OFF, CameraState.ERROR]:
-            self._pirt1280.disable()
-        elif new_state in list(CameraState):
-            self._pirt1280.enable()
-            self._count = 0
+        try:
+            if new_state in [CameraState.OFF, CameraState.ERROR]:
+                self._pirt1280.disable()
+            elif new_state == CameraState.STANDBY:
+                self._pirt1280.enable()
+            elif new_state == CameraState.CAPTURE:
+                self._count = 0
+        except Pirt1280Error as e:
+            logger.exception(e)
+            new_state = CameraState.ERROR
 
         logger.info(f'state transistion {self._state.name} -> {new_state.name}')
+
         self._state = new_state
 
     def on_loop(self):
 
-        if self._state == CameraState.OFF:
-            self.sleep(1)
-        elif self._state == CameraState.STANDBY:
+        if self._next_state_internal is not None:
+            self._state_machine_transition(self._next_state_internal)
+            self._next_state_internal = None
+        elif self._next_state_user is not None:
+            self._state_machine_transition(self._next_state_user)
+            self._next_state_user = None
+
+        if self._state in [CameraState.OFF, CameraState.STANDBY, CameraState.ERROR]:
             self.sleep(1)
         elif self._state == CameraState.CAPTURE:
             self._count += 1
-            self._capture()
+
+            try:
+                self._capture()
+            except Pirt1280Error:
+                self._next_state_internal = CameraState.ERROR
+                return
+
             if self._capture_count_obj.value != 0 and \
                     self._count >= self._capture_count_obj.value:
-                self._state_machine_transittion(CameraState.STANDBY)
-            else:
+                # that was the last capture in a sequence requested
+                self._next_state_internal = CameraState.STANDBY
+            else:  # no limit
                 self.sleep(self._capture_delay_obj.value / 1000)
         else:
-            self._state = CameraState.OFF
+            logger.error(f'was in unknown state {self._state}, resetting to OFF')
+            self._next_state_internal = CameraState.OFF
 
     def on_loop_error(self, error: Exception):
 
         logger.exception(error)
-        self._state_machine_transittion(CameraState.ERROR)
+        self._state_machine_transition(CameraState.ERROR)
 
     def _capture(self, count: int = 1):
         '''Capture x raw images in a row with no delay and save them to fread cache'''
@@ -146,7 +172,7 @@ class CameraService(Service):
         '''SDO read on the state machine obj'''
 
         if index == self.state_index and subindex == 0x1:
-            self._state_machine_transittion(value)
+            self._next_state_user = value
 
     def on_camera_read(self, index: int, subindex: int):
         '''SDO read on the camera obj'''
@@ -169,7 +195,6 @@ class CameraService(Service):
         '''SDO read on the camera obj'''
 
         if index == self.camera_index and subindex == 0x7:
-            logger.info(f'changing integration time to {value} ms')
             self._pirt1280.integration_time = value
 
     def on_test_camera_read(self, index: int, subindex: int):
