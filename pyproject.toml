@@ -31,10 +31,10 @@ dependencies = [
 dynamic = ["version"]
 
 [project.scripts]
-oresat-c3 = "oresat_cfc.__main__:main"
+oresat-cfc = "oresat_cfc.__main__:main"
 
 [tool.setuptools.dynamic]
-version = {attr = "oresat_c3.__version__"}
+version = {attr = "oresat_cfc.__version__"}
 
 [tool.setuptools.packages.find]
 exclude = ["docs*"]
