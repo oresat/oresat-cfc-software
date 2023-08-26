@@ -173,7 +173,8 @@ class Pirt1280:
         value_read = self._read_8b_reg(reg)
 
         if value != value_read:
-            raise Pirt1280Error(f'readback to reg {reg} did not match {value} vs {value_read}')
+            raise Pirt1280Error(f'readback to regs {Pirt1280Register(reg).name} did not match '
+                                f'0x{value:X} vs 0x{value_read:X}')
 
     def _write_16b_reg(self, reg: int, value: int):
         '''Write a 16-bit int to a pair of registers.'''
@@ -200,7 +201,8 @@ class Pirt1280:
         value_read = int.from_bytes(bytes([reg0_read, reg1_read]), 'little')
 
         if value != value_read:
-            raise Pirt1280Error(f'readback to regs {reg} did not match {value} vs {value_read}')
+            raise Pirt1280Error(f'readback to regs {Pirt1280Register(reg).name} did not match '
+                                f'0x{value:X} vs 0x{value_read:X}')
 
     def capture(self) -> bytes:
         '''
@@ -296,9 +298,11 @@ class Pirt1280:
         irb_read = int.from_bytes(bytes([irb0, irb1, irb2, irb3]), 'little')
 
         if frame_refclks != frb_read:
-            raise Pirt1280Error(f'readback to FT regs did not match {frame_refclks} vs {frb_read}')
+            raise Pirt1280Error(f'readback to FT regs did not match 0x{frame_refclks:X} vs '
+                                f'0x{frb_read:X}')
         if intr_refclks != irb_read:
-            raise Pirt1280Error(f'readback to IT regs did not match {intr_refclks} vs {irb_read}')
+            raise Pirt1280Error(f'readback to IT regs did not match 0x{intr_refclks:X} vs '
+                                f'0x{irb_read:x}')
 
     def _get_temp(self) -> float:
         '''Get the raw temperature of the sensor.'''
