@@ -120,7 +120,7 @@ AccessType=ro
 DefaultValue=0x00000000
 
 [OptionalObjects]
-SupportedObjects=90
+SupportedObjects=89
 1=0x1002
 2=0x1003
 3=0x1005
@@ -209,8 +209,7 @@ SupportedObjects=90
 86=0x6000
 87=0x6001
 88=0x6002
-89=0x6003
-90=0x7000
+89=0x7000
 
 [1002]
 ParameterName=Manufacturer status register
