@@ -4183,14 +4183,14 @@ DefaultValue=0x00000008
 [6000]
 ParameterName=State Machine
 ObjectType=0x09
-SubNumber=4
+SubNumber=5
 
 [6000sub0]
 ParameterName=Highest sub-index supported
 ObjectType=0x07
 DataType=0x0005
 AccessType=const
-DefaultValue=0x03
+DefaultValue=0x04
 
 ;Read for current state or write to change state.
 ;
@@ -4222,6 +4222,15 @@ ObjectType=0x07
 DataType=0x0005
 AccessType=rw
 DefaultValue=1
+
+;Save images captured, default enabled.
+[6000sub4]
+ParameterName=Capture save
+ObjectType=0x07
+DataType=0x0001
+AccessType=rw
+DefaultValue=1
+PDOMapping=1
 
 [6001]
 ParameterName=Camera
@@ -4429,12 +4438,12 @@ ObjectType=0x07
 DataType=0x000F
 AccessType=ro
 
-;Enable / disable the camera. Can only be written to when in standby state.
+;Last unix time stamp in ms a image was captured
 [7000sub3]
-ParameterName=Enable
+ParameterName=Last capture time
 ObjectType=0x07
-DataType=0x0001
-AccessType=rw
+DataType=0x001B
+AccessType=ro
 DefaultValue=0
 
 [ManufacturerObjects]

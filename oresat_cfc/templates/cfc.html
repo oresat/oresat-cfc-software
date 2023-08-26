@@ -49,8 +49,12 @@
           <td><span id="captureDelay">1000</span> ms</td>
         </tr>
         <tr>
-          <td>Capture Count</td>
-          <td><span id="captureCount">1</span></td>
+          <td>Capture Amount</td>
+          <td><span id="captureAmount">1</span></td>
+        </tr>
+        <tr>
+          <td>Save Captures</td>
+          <td><span id="saveCaptures">TRUE</span></td>
         </tr>
       </table>
       <br />
@@ -116,6 +120,10 @@
         <input id="newCapAmount" type="number" step="1">
         <br>
         <br>
+        <label for="newCapSave">Save Captures:</label>
+        <input id="newCapSave" type="checkbox">
+        <br>
+        <br>
         <b>Camera</b>
         <br>
         <br>
@@ -151,7 +159,8 @@
       if (dialog.open) {
         const stateObj = await readValue("0x6000", "0x1");
         const capDelayObj = await readValue("0x6000", "0x2");
-        const capCountObj = await readValue("0x6000", "0x3");
+        const capAmountObj = await readValue("0x6000", "0x3");
+        const capSaveObj = await readValue("0x6000", "0x4");
         const intTimeObj = await readValue("0x6001", "0x7");
         const tecEnableObj = await readValue("0x6002", "0x1");
         const tecTargetTempObj = await readValue("0x6002", "0x3");
@@ -171,8 +180,9 @@
         }
 
         document.getElementById("newState").selectedIndex = state - 1;
+        document.getElementById("newCapSave").checked = capSaveObj.value;
         document.getElementById("newCapDelay").value = capDelayObj.value;
-        document.getElementById("newCapAmount").value = capCountObj.value;
+        document.getElementById("newCapAmount").value = capAmountObj.value;
         document.getElementById("newIntTime").value = Math.round(intTimeObj.value);
         document.getElementById("tecEnable").checked = tecEnableObj.value;
         document.getElementById("newTargetTemp").value = tecTargetTempObj.value;
@@ -180,6 +190,7 @@
         writeValue("0x6000", "0x1", document.getElementById("newState").selectedIndex + 1);
         writeValue("0x6000", "0x2", parseInt(document.getElementById("newCapDelay").value));
         writeValue("0x6000", "0x3", parseInt(document.getElementById("newCapAmount").value));
+        writeValue("0x6000", "0x4", document.getElementById("newCapSave").checked);
         if (parseFloat(document.getElementById("newIntTime").value) > 0) {
           writeValue("0x6001", "0x7", parseFloat(document.getElementById("newIntTime").value));
         }
@@ -253,21 +264,32 @@
       0x03: "CAPTURE",
       0xFF: "ERROR",
     };
+    let lastCapture = 0;
 
     /** Update all info / data being displayed */
     async function update() {
       let obj;
 
-      // get last image capture
-      obj = await readValue("0x7000", "0x2");
-      lastDisplayImage = obj.value;
-      document.getElementById("image").src = "data:image/jpg;base64, " + obj.value;
-
       // get CFC state
       obj = await readValue("0x6000", null);
-      document.getElementById("cfcState").innerHTML = STATES[obj.subindexes[1].value];
+      let state = STATES[obj.subindexes[1].value];
+      document.getElementById("cfcState").innerHTML = state;
       document.getElementById("captureDelay").innerHTML = obj.subindexes[2].value;
-      document.getElementById("captureCount").innerHTML = obj.subindexes[3].value;
+      document.getElementById("captureAmount").innerHTML = obj.subindexes[3].value;
+      if (obj.subindexes[4].value === true) {
+        document.getElementById("saveCaptures").innerHTML = "TRUE";
+      } else {
+        document.getElementById("saveCaptures").innerHTML = "FALSE";
+      }
+
+      // get last image capture for display
+      obj = await readValue("0x7000", "0x3");
+      if (state != "OFF" && obj.value != lastCapture) {
+        lastCapture = obj.value;
+        obj = await readValue("0x7000", "0x2");
+        lastDisplayImage = obj.value;
+        document.getElementById("image").src = "data:image/jpg;base64, " + obj.value;
+      }
 
       // get camera info
       obj = await readValue("0x6001", null);

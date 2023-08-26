@@ -58,6 +58,10 @@ class CameraService(Service):
 
         self._capture_delay_obj = self.node.od[self.state_index][2]
         self._capture_count_obj = self.node.od[self.state_index][3]
+        self._capture_save_obj = self.node.od[self.state_index][4]
+        self._capture_save_obj.value = True  # make sure this is True by default
+        self._last_capture_dt_obj = self.node.od[self.test_camera_index][3]
+        self._last_capture_dt_obj.value = 0
 
         self.node.add_sdo_read_callback(self.state_index, self.on_state_read)
         self.node.add_sdo_write_callback(self.state_index, self.on_state_write)
@@ -66,7 +70,6 @@ class CameraService(Service):
         self.node.add_sdo_write_callback(self.camera_index, self.on_camera_write)
 
         self.node.add_sdo_read_callback(self.test_camera_index, self.on_test_camera_read)
-        self.node.add_sdo_write_callback(self.test_camera_index, self.on_test_camera_write)
 
     def on_stop(self):
 
@@ -111,7 +114,7 @@ class CameraService(Service):
             self._next_state_user = None
 
         if self._state in [CameraState.OFF, CameraState.STANDBY, CameraState.ERROR]:
-            self.sleep(1)
+            self.sleep(0.1)
         elif self._state == CameraState.CAPTURE:
             self._count += 1
 
@@ -142,25 +145,28 @@ class CameraService(Service):
         logger.info('capture')
         dt = time()
         self._last_capture = self._pirt1280.capture()
-        metadata = {
-            'sw_version': __version__,
-            'time': dt,
-            'temperature': self._pirt1280.temperature,
-            'integration_time': self._pirt1280.integration_time,
-        }
+        self._last_capture_dt_obj.value = int(dt * 1000)
 
-        file_name = '/tmp/' + new_oresat_file('capture', date=dt, ext='.tiff')
-        data = pirt1280_raw_to_numpy(self._last_capture)
+        if self._capture_save_obj.value:  # save captures
+            metadata = {
+                'sw_version': __version__,
+                'time': dt,
+                'temperature': self._pirt1280.temperature,
+                'integration_time': self._pirt1280.integration_time,
+            }
 
-        tifffile.imwrite(
-            file_name,
-            data,
-            dtype=data.dtype,
-            metadata=metadata,
-            photometric='miniswhite',
-        )
+            file_name = '/tmp/' + new_oresat_file('capture', date=dt, ext='.tiff')
+            data = pirt1280_raw_to_numpy(self._last_capture)
 
-        self.node.fread_cache.add(file_name, consume=True)
+            tifffile.imwrite(
+                file_name,
+                data,
+                dtype=data.dtype,
+                metadata=metadata,
+                photometric='miniswhite',
+            )
+
+            self.node.fread_cache.add(file_name, consume=True)
 
     def on_state_read(self, index: int, subindex: int):
         '''SDO read on the state machine obj'''
@@ -209,23 +215,8 @@ class CameraService(Service):
             ret = self._last_capture
         elif subindex == 0x2 and self._last_capture is not None:
             ret = make_display_image(self._last_capture, sat_percent=95, downscale_factor=2)
-        elif subindex == 0x3:
-            ret = self._pirt1280.is_enabled
 
         return ret
-
-    def on_test_camera_write(self, index: int, subindex: int, value):
-        '''SDO write on the test camera obj'''
-
-        if index != self.test_camera_index and subindex != 0x3:
-            return
-
-        if value:
-            logger.info('enabling pirt1280')
-            self.camera.enable()
-        else:
-            logger.info('disabling pirt1280')
-            self.camera.disable()
 
 
 def make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
