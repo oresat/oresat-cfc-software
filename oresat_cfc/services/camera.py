@@ -1,16 +1,17 @@
-'''
+"""
 Main camera service.
 
 Seperate from the TEC controller service as the camera can be used regaurdless if the TEC is
 enabled or not.
-'''
+"""
 
 from enum import IntEnum
 from time import time
 
+import canopen
 import cv2
-import tifffile
 import numpy as np
+import tifffile
 from olaf import Service, logger, new_oresat_file
 
 from .. import __version__
@@ -18,27 +19,34 @@ from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
 
 
 class CameraState(IntEnum):
+    """All the states for CFC camera."""
+
     OFF = 0x1
-    '''Camera is off'''
+    """Camera is off"""
     STANDBY = 0x2
-    '''Camera is on, but no doing anything'''
+    """Camera is on, but no doing anything"""
     CAPTURE = 0x3
-    '''Camera is capturing image and saving them to freac cache'''
+    """Camera is capturing image and saving them to freac cache"""
     ERROR = 0xFF
-    '''Error with camera hardware'''
+    """Error with camera hardware"""
 
 
 STATE_TRANSMISSIONS = {
     CameraState.OFF: [CameraState.OFF, CameraState.STANDBY],
     CameraState.STANDBY: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE],
-    CameraState.CAPTURE: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE,
-                          CameraState.ERROR],
+    CameraState.CAPTURE: [
+        CameraState.OFF,
+        CameraState.STANDBY,
+        CameraState.CAPTURE,
+        CameraState.ERROR,
+    ],
     CameraState.ERROR: [CameraState.OFF, CameraState.ERROR],
 }
+"""Valid state transistions."""
 
 
 class CameraService(Service):
-    '''Service for camera and capture state machine'''
+    """Service for camera and capture state machine"""
 
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
@@ -54,8 +62,14 @@ class CameraService(Service):
         self.camera_index = 0x6001
         self.test_camera_index = 0x7000
 
-    def on_start(self):
+        self._capture_delay_obj: canopen.objectdictionary.Variable = None
+        self._capture_count_obj: canopen.objectdictionary.Variable = None
+        self._capture_save_obj: canopen.objectdictionary.Variable = None
+        self._last_capture_dt_obj: canopen.objectdictionary.Variable = None
 
+        self._count = 0
+
+    def on_start(self):
         self._capture_delay_obj = self.node.od[self.state_index][2]
         self._capture_count_obj = self.node.od[self.state_index][3]
         self._capture_save_obj = self.node.od[self.state_index][4]
@@ -72,21 +86,20 @@ class CameraService(Service):
         self.node.add_sdo_read_callback(self.test_camera_index, self.on_test_camera_read)
 
     def on_stop(self):
-
         self._pirt1280.disable()
 
-    def _state_machine_transition(self, new_state: CameraState or int):
-        '''Transition from one state to another.'''
+    def _state_machine_transition(self, new_state: [CameraState, int]):
+        """Transition from one state to another."""
 
         if new_state not in list(CameraState):
-            logger.error(f'invalid new state {new_state}')
+            logger.error(f"invalid new state {new_state}")
             return
 
         if isinstance(new_state, int):
             new_state = CameraState(new_state)
 
         if new_state not in STATE_TRANSMISSIONS[self._state]:
-            logger.error(f'invalid state transistion {self._state.name} -> {new_state.name}')
+            logger.error(f"invalid state transistion {self._state.name} -> {new_state.name}")
             return
 
         try:
@@ -100,12 +113,11 @@ class CameraService(Service):
             logger.exception(e)
             new_state = CameraState.ERROR
 
-        logger.info(f'state transistion {self._state.name} -> {new_state.name}')
+        logger.info(f"state transistion {self._state.name} -> {new_state.name}")
 
         self._state = new_state
 
     def on_loop(self):
-
         if self._next_state_internal is not None:
             self._state_machine_transition(self._next_state_internal)
             self._next_state_internal = None
@@ -124,38 +136,36 @@ class CameraService(Service):
                 self._next_state_internal = CameraState.ERROR
                 return
 
-            if self._capture_count_obj.value != 0 and \
-                    self._count >= self._capture_count_obj.value:
+            if self._capture_count_obj.value != 0 and self._count >= self._capture_count_obj.value:
                 # that was the last capture in a sequence requested
                 self._next_state_internal = CameraState.STANDBY
             else:  # no limit
                 self.sleep(self._capture_delay_obj.value / 1000)
         else:
-            logger.error(f'was in unknown state {self._state}, resetting to OFF')
+            logger.error(f"was in unknown state {self._state}, resetting to OFF")
             self._next_state_internal = CameraState.OFF
 
     def on_loop_error(self, error: Exception):
-
         logger.exception(error)
         self._state_machine_transition(CameraState.ERROR)
 
     def _capture(self, count: int = 1):
-        '''Capture x raw images in a row with no delay and save them to fread cache'''
+        """Capture x raw images in a row with no delay and save them to fread cache"""
 
-        logger.info('capture')
+        logger.info("capture")
         dt = time()
         self._last_capture = self._pirt1280.capture()
         self._last_capture_dt_obj.value = int(dt * 1000)
 
         if self._capture_save_obj.value:  # save captures
             metadata = {
-                'sw_version': __version__,
-                'time': dt,
-                'temperature': self._pirt1280.temperature,
-                'integration_time': self._pirt1280.integration_time,
+                "sw_version": __version__,
+                "time": dt,
+                "temperature": self._pirt1280.temperature,
+                "integration_time": self._pirt1280.integration_time,
             }
 
-            file_name = '/tmp/' + new_oresat_file('capture', date=dt, ext='.tiff')
+            file_name = "/tmp/" + new_oresat_file("capture", date=dt, ext=".tiff")
             data = pirt1280_raw_to_numpy(self._last_capture)
 
             tifffile.imwrite(
@@ -163,28 +173,30 @@ class CameraService(Service):
                 data,
                 dtype=data.dtype,
                 metadata=metadata,
-                photometric='miniswhite',
+                photometric="miniswhite",
             )
 
             self.node.fread_cache.add(file_name, consume=True)
 
     def on_state_read(self, index: int, subindex: int):
-        '''SDO read on the state machine obj'''
+        """SDO read on the state machine obj"""
 
         if index == self.state_index and subindex == 0x1:
             return self._state.value
 
+        return None
+
     def on_state_write(self, index: int, subindex: int, value):
-        '''SDO read on the state machine obj'''
+        """SDO read on the state machine obj"""
 
         if index == self.state_index and subindex == 0x1:
             self._next_state_user = value
 
     def on_camera_read(self, index: int, subindex: int):
-        '''SDO read on the camera obj'''
+        """SDO read on the camera obj"""
 
         if index != self.camera_index:
-            return
+            return None
 
         ret = None
 
@@ -198,16 +210,16 @@ class CameraService(Service):
         return ret
 
     def on_camera_write(self, index: int, subindex: int, value):
-        '''SDO read on the camera obj'''
+        """SDO read on the camera obj"""
 
         if index == self.camera_index and subindex == 0x7:
             self._pirt1280.integration_time = value
 
     def on_test_camera_read(self, index: int, subindex: int):
-        '''SDO read on the test camera obj'''
+        """SDO read on the test camera obj"""
 
         if index != self.test_camera_index:
-            return
+            return None
 
         ret = None
 
@@ -219,9 +231,10 @@ class CameraService(Service):
         return ret
 
 
-def make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
-                       downscale_factor: int = 1) -> bytes:
-    '''
+def make_display_image(
+    raw: bytes, ext: str = ".jpg", sat_percent: int = 0, downscale_factor: int = 1
+) -> bytes:
+    """
     Generate an image to send to UI (heavy manipulated image for UI display).
 
     Parameters
@@ -234,7 +247,7 @@ def make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
         Option to color pixel above a saturation percentage red. Set to 0 to disable.
     downscale_factor: int
         Downscale factor size in both row and columns. Set to 1 or less to not downscale.
-    '''
+    """
 
     data = pirt1280_raw_to_numpy(raw)
 
@@ -243,12 +256,6 @@ def make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
     for i in range(3):
         tmp[:, :, i] = data[:, :]
     data = tmp
-
-    '''
-    # flip the image because it is read upside down
-    data = cv2.flip(data, 0)
-    data = cv2.flip(data, 1)
-    '''
 
     # manipulate image for displaying
     data //= 64  # scale 14-bits to 8-bits
@@ -265,8 +272,8 @@ def make_display_image(raw: bytes, ext: str = '.jpg', sat_percent: int = 0,
         sat_pixels = np.where(data[:, :] >= [sat_value, sat_value, sat_value])
         data[sat_pixels[0], sat_pixels[1]] = [0, 0, 255]  # red
 
-    ok, encoded = cv2.imencode(ext, data)
+    ok, encoded = cv2.imencode(ext, data)  # pylint: disable=E1101
     if not ok:
-        raise ValueError(f'{ext} encode error')
+        raise ValueError(f"{ext} encode error")
 
     return bytes(encoded)
