@@ -34,32 +34,39 @@ class TecControllerService(Service):
         self._lowest_temp = 100  # something high by default
         self._controller_enabled = False
 
-        self.tec_index = 0x6002
-
         self._saturated_obj: canopen.objectdictionary.Variable = None
         self._saturation_diff_obj: canopen.objectdictionary.Variable = None
-        self._pid_delay_ms_obj: canopen.objectdictionary.Variable = None
+        self._pid_delay_obj: canopen.objectdictionary.Variable = None
         self._cooldown_temp_obj: canopen.objectdictionary.Variable = None
         self._mv_avg_samples_obj: canopen.objectdictionary.Variable = None
 
     def on_start(self):
-        self.node.add_sdo_read_callback(self.tec_index, self.on_tec_read)
-        self.node.add_sdo_write_callback(self.tec_index, self.on_tec_write)
+        self.node.add_sdo_callbacks("tec", "status", self._on_read_status, self._on_write_status)
+        self.node.add_sdo_callbacks(
+            "tec",
+            "pid_setpoint",
+            self._on_read_pid_setpoint,
+            self._on_write_pid_setpoint,
+        )
+        self.node.add_sdo_callbacks("tec", "pid_kp", None, self._on_write_pid_p)
+        self.node.add_sdo_callbacks("tec", "pid_ki", None, self._on_write_pid_i)
+        self.node.add_sdo_callbacks("tec", "pid_kd", None, self._on_write_pid_d)
 
-        tec_controller_rec = self.node.od[0x6002]
-        self._saturated_obj = tec_controller_rec[0x2]
+        rec = self.node.od["tec"]
+        self._saturated_obj = rec["saturated"]
         self._saturated_obj.value = False  # make sure this is False by default
-        self._saturation_diff_obj = tec_controller_rec[0x5]
-        self._pid_delay_ms_obj = tec_controller_rec[0x9]
-        self._cooldown_temp_obj = tec_controller_rec[0xA]
-        self._mv_avg_samples_obj = tec_controller_rec[0xB]
+        self._saturation_diff_obj = rec["saturation_diff"]
+        self._pid_delay_obj = rec["pid_delay"]
+        self._cooldown_temp_obj = rec["cooldown_temperature"]
+        self._mv_avg_samples_obj = rec["moving_avg_samples"]
 
         self._pid = PID(
-            tec_controller_rec[0x6].value,
-            tec_controller_rec[0x7].value,
-            tec_controller_rec[0x8].value,
+            Kp=rec["pid_kp"].value,
+            Ki=rec["pid_ki"].value,
+            Kd=rec["pid_kd"].value,
+            setpoint=rec["pid_setpoint"].value,
+            sample_time=self._pid_delay_obj.value,
         )
-        self._pid.setpoint = tec_controller_rec[0x3].value
 
     def on_stop(self):
         self._tec.disable()
@@ -81,7 +88,7 @@ class TecControllerService(Service):
         return sum(self._samples) / len(self._samples)
 
     def on_loop(self):
-        self.sleep(self._pid_delay_ms_obj.value / 1000)
+        self.sleep(self._pid_delay_obj.value / 1000)
 
         # only run tec controller alg when the camera and TEC controller are both enabled
         if not self._camera.is_enabled or not self._controller_enabled:
@@ -101,7 +108,7 @@ class TecControllerService(Service):
             f"lowest: {self._lowest_temp} / mv avg: {mv_avg} / PID diff: {diff}"
         )
 
-        # don't even try to control the TEC if above the cooldown temperature
+        # don"t even try to control the TEC if above the cooldown temperature
         if current_temp >= self._cooldown_temp_obj.value:
             logger.info(
                 "current temperature is above cooldown temperature, disabling TEC controller"
@@ -138,36 +145,45 @@ class TecControllerService(Service):
         self._tec.disable()
         self._controller_enabled = False
 
-    def on_tec_read(self, index: int, subindex: int):
-        """SDO read on the camera obj"""
+    def _on_read_status(self) -> bool:
+        """SDO read callback for TEC status."""
 
-        ret = None
+        return self._controller_enabled
 
-        if index != self.tec_index:
-            return ret
+    def _on_write_status(self, value: bool):
+        """SDO write callback for TEC status."""
 
-        if subindex == 0x1:
-            ret = self._controller_enabled
-        elif subindex == 0x3:
-            ret = self._pid.setpoint
+        if value and not self._controller_enabled:
+            # reset these on an enable, if currently disabled
+            logger.info("enabling TEC controller")
+            self._past_saturation_pt_since_enable = False
+            self._saturated_obj.value = False
+            self._lowest_temp = 100
+        elif not value and self._controller_enabled:
+            logger.info("disabling TEC controller")
+        self._controller_enabled = value
 
-        return ret
+    def _on_read_pid_setpoint(self) -> int:
+        """SDO read callback for TEC"s PID setpoint."""
 
-    def on_tec_write(self, index: int, subindex: int, value):
-        """SDO read on the camera obj"""
+        return int(self._pid.setpoint)
 
-        if index != self.tec_index:
-            return
+    def _on_write_pid_setpoint(self, value: int):
+        """SDO read callback for TEC"s PID setpoint."""
 
-        if subindex == 0x1:
-            if value and not self._controller_enabled:
-                # reset these on an enable, if currently disabled
-                logger.info("enabling TEC controller")
-                self._past_saturation_pt_since_enable = False
-                self._saturated_obj.value = False
-                self._lowest_temp = 100
-            elif not value and self._controller_enabled:
-                logger.info("disabling TEC controller")
-            self._controller_enabled = value
-        elif subindex == 0x3:
-            self._pid.setpoint = value
+        self._pid.setpoint = value
+
+    def _on_write_pid_p(self, value: float):
+        """SDO write callback for the TEC"s PID Kp."""
+
+        self._pid.Kp = value
+
+    def _on_write_pid_i(self, value: float):
+        """SDO write callback for the TEC"s PID Ki."""
+
+        self._pid.Ki = value
+
+    def _on_write_pid_d(self, value: float):
+        """SDO write callback for the TEC"s PID Kd."""
+
+        self._pid.Kd = value

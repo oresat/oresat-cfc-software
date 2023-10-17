@@ -52,38 +52,41 @@ class CameraService(Service):
         super().__init__()
 
         self._state = CameraState.OFF
-        self._last_capture = None
-        self._next_state_internal = None
-        self._next_state_user = None
+        self._next_state_internal = -1
+        self._next_state_user = -1
 
         self._pirt1280 = pirt1280
-
-        self.state_index = 0x6000
-        self.camera_index = 0x6001
-        self.test_camera_index = 0x7000
 
         self._capture_delay_obj: canopen.objectdictionary.Variable = None
         self._capture_count_obj: canopen.objectdictionary.Variable = None
         self._capture_save_obj: canopen.objectdictionary.Variable = None
-        self._last_capture_dt_obj: canopen.objectdictionary.Variable = None
+        self._last_capture_obj: canopen.objectdictionary.Variable = None
+        self._last_capture_time_obj: canopen.objectdictionary.Variable = None
 
         self._count = 0
 
     def on_start(self):
-        self._capture_delay_obj = self.node.od[self.state_index][2]
-        self._capture_count_obj = self.node.od[self.state_index][3]
-        self._capture_save_obj = self.node.od[self.state_index][4]
+        rec = self.node.od["camera"]
+        self._capture_delay_obj = rec["capture_delay"]
+        self._capture_count_obj = rec["number_to_capture"]
+        self._capture_save_obj = rec["save_captures"]
         self._capture_save_obj.value = True  # make sure this is True by default
-        self._last_capture_dt_obj = self.node.od[self.test_camera_index][3]
-        self._last_capture_dt_obj.value = 0
+        self._last_capture_obj = rec["last_capture"]
+        self._last_capture_time_obj = rec["last_capture_time"]
+        self._last_capture_time_obj.value = 0
 
-        self.node.add_sdo_read_callback(self.state_index, self.on_state_read)
-        self.node.add_sdo_write_callback(self.state_index, self.on_state_write)
-
-        self.node.add_sdo_read_callback(self.camera_index, self.on_camera_read)
-        self.node.add_sdo_write_callback(self.camera_index, self.on_camera_write)
-
-        self.node.add_sdo_read_callback(self.test_camera_index, self.on_test_camera_read)
+        self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
+        self.node.add_sdo_callbacks(
+            "camera",
+            "integration_time",
+            self._on_read_cam_integration,
+            self._on_write_cam_integration,
+        )
+        self.node.add_sdo_callbacks("camera", "temperature", self._on_read_cam_temp, None)
+        self.node.add_sdo_callbacks(
+            "camera", "last_display_image", self._on_read_last_display_capture, None
+        )
+        self.node.add_sdo_callbacks("camera", "enabled", self._on_read_cam_enabled, None)
 
     def on_stop(self):
         self._pirt1280.disable()
@@ -118,12 +121,12 @@ class CameraService(Service):
         self._state = new_state
 
     def on_loop(self):
-        if self._next_state_internal is not None:
+        if self._next_state_internal != -1:
             self._state_machine_transition(self._next_state_internal)
-            self._next_state_internal = None
-        elif self._next_state_user is not None:
+            self._next_state_internal = -1
+        elif self._next_state_user != -1:
             self._state_machine_transition(self._next_state_user)
-            self._next_state_user = None
+            self._next_state_user = -1
 
         if self._state in [CameraState.OFF, CameraState.STANDBY, CameraState.ERROR]:
             self.sleep(0.1)
@@ -133,17 +136,17 @@ class CameraService(Service):
             try:
                 self._capture()
             except Pirt1280Error:
-                self._next_state_internal = CameraState.ERROR
+                self._next_state_internal = CameraState.ERROR.value
                 return
 
             if self._capture_count_obj.value != 0 and self._count >= self._capture_count_obj.value:
                 # that was the last capture in a sequence requested
-                self._next_state_internal = CameraState.STANDBY
+                self._next_state_internal = CameraState.STANDBY.value
             else:  # no limit
                 self.sleep(self._capture_delay_obj.value / 1000)
         else:
             logger.error(f"was in unknown state {self._state}, resetting to OFF")
-            self._next_state_internal = CameraState.OFF
+            self._next_state_internal = CameraState.OFF.value
 
     def on_loop_error(self, error: Exception):
         logger.exception(error)
@@ -153,20 +156,20 @@ class CameraService(Service):
         """Capture x raw images in a row with no delay and save them to fread cache"""
 
         logger.info("capture")
-        dt = time()
-        self._last_capture = self._pirt1280.capture()
-        self._last_capture_dt_obj.value = int(dt * 1000)
+        ts = time()
+        self._last_capture_obj.value = self._pirt1280.capture()
+        self._last_capture_time_obj.value = int(ts * 1000)
 
         if self._capture_save_obj.value:  # save captures
             metadata = {
                 "sw_version": __version__,
-                "time": dt,
+                "time": ts,
                 "temperature": self._pirt1280.temperature,
                 "integration_time": self._pirt1280.integration_time,
             }
 
-            file_name = "/tmp/" + new_oresat_file("capture", date=dt, ext=".tiff")
-            data = pirt1280_raw_to_numpy(self._last_capture)
+            file_name = "/tmp/" + new_oresat_file("capture", date=ts, ext=".tiff")
+            data = pirt1280_raw_to_numpy(self._last_capture_obj.value)
 
             tifffile.imwrite(
                 file_name,
@@ -178,57 +181,40 @@ class CameraService(Service):
 
             self.node.fread_cache.add(file_name, consume=True)
 
-    def on_state_read(self, index: int, subindex: int):
-        """SDO read on the state machine obj"""
+    def _on_read_status(self) -> int:
+        """SDO read callback for status"""
 
-        if index == self.state_index and subindex == 0x1:
-            return self._state.value
+        return self._state.value
 
-        return None
+    def _on_write_status(self, value: int):
+        """SDO write callback for status"""
 
-    def on_state_write(self, index: int, subindex: int, value):
-        """SDO read on the state machine obj"""
+        self._next_state_user = value
 
-        if index == self.state_index and subindex == 0x1:
-            self._next_state_user = value
+    def _on_read_cam_temp(self) -> int:
+        """SDO read callback for camera temperature."""
 
-    def on_camera_read(self, index: int, subindex: int):
-        """SDO read on the camera obj"""
+        return int(self._pirt1280.temperature)
 
-        if index != self.camera_index:
-            return None
+    def _on_read_cam_integration(self) -> int:
+        """SDO read callback for camera integration time."""
 
-        ret = None
+        return int(self._pirt1280.integration_time)
 
-        if subindex == 0x4:
-            ret = self._pirt1280.is_enabled
-        elif subindex == 0x5:
-            ret = int(self._pirt1280.temperature)
-        elif subindex == 0x7:
-            ret = self._pirt1280.integration_time
+    def _on_write_cam_integration(self, value: int):
+        """SDO write callback for camera integration time."""
 
-        return ret
+        self._pirt1280.integration_time = value
 
-    def on_camera_write(self, index: int, subindex: int, value):
-        """SDO read on the camera obj"""
+    def _on_read_last_display_capture(self) -> bytes:
+        """SDO read callback for display image."""
 
-        if index == self.camera_index and subindex == 0x7:
-            self._pirt1280.integration_time = value
+        return make_display_image(self._last_capture_obj.value, sat_percent=95, downscale_factor=2)
 
-    def on_test_camera_read(self, index: int, subindex: int):
-        """SDO read on the test camera obj"""
+    def _on_read_cam_enabled(self) -> bytes:
+        """SDO read callback for camera enabled."""
 
-        if index != self.test_camera_index:
-            return None
-
-        ret = None
-
-        if subindex == 0x1:
-            ret = self._last_capture
-        elif subindex == 0x2 and self._last_capture is not None:
-            ret = make_display_image(self._last_capture, sat_percent=95, downscale_factor=2)
-
-        return ret
+        return self._pirt1280.is_enabled
 
 
 def make_display_image(

@@ -1,8 +1,11 @@
-"""Main for cfc olaf app."""
+"""CFC OLAF app main"""
+
 import os
 
 from olaf import app, olaf_run, olaf_setup, render_olaf_template, rest_api
+from oresat_od_db import OD_DB, NodeId
 
+from . import __version__
 from .drivers.pirt1280 import Pirt1280
 from .drivers.rc625 import Rc625
 from .services.camera import CameraService
@@ -20,17 +23,18 @@ def main():
 
     path = os.path.dirname(os.path.abspath(__file__))
 
-    args = olaf_setup(f"{path}/data/oresat_cfc.dcf")
+    args = olaf_setup(OD_DB, NodeId.CFC)
     mock_args = [i.lower() for i in args.mock_hw]
     mock_camera = "camera" in mock_args or "all" in mock_args
     mock_tec = "tec" in mock_args or "all" in mock_args
 
-    # get configs form OD
-    camera_spi_bus = app.od["Camera"]["SPI bus"].value
-    camera_spi_device = app.od["Camera"]["SPI device"].value
-    camera_enable_pin = app.od["Camera"]["Enable gpio pin"].value
-    camera_adc_num = app.od["Camera"]["ADC pin"].value
-    tec_enable_pin = app.od["TEC controller"]["Enable gpio pin"].value
+    camera_spi_bus = 1
+    camera_spi_device = 1
+    camera_enable_pin = "SENSOR_ENABLE"
+    camera_adc_num = 2
+    tec_enable_pin = "TEC_ENABLE"
+
+    app.od["versions"]["sw_version"].value = __version__
 
     pirt1280 = Pirt1280(
         camera_spi_bus, camera_spi_device, camera_enable_pin, camera_adc_num, mock_camera

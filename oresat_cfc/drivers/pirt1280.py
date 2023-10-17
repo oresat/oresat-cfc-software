@@ -131,7 +131,7 @@ class Pirt1280:
         read_value = self._read_8b_reg(Pirt1280Register.CONF1.value)
         self._write_8b_reg(Pirt1280Register.CONF1.value, read_value & 0x3F)
 
-        self.integration_time = 1
+        self.integration_time = 1.0
 
     def disable(self):
         """Disable the PIRT1280 (power it off)."""
@@ -240,7 +240,9 @@ class Pirt1280:
     def integration_time(self) -> float:
         """float: The integration time in milliseconds."""
 
-        return self._integration_time
+        if self.is_enabled:
+            return self._integration_time
+        return 0.0
 
     @integration_time.setter
     def integration_time(self, value: float):

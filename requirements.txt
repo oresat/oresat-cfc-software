@@ -2,7 +2,8 @@ flake8
 imagecodecs
 numpy
 opencv-python-headless==4.6.0.66
-oresat-olaf>=2.2.0
+oresat-od-database
+oresat-olaf>=3.0.0
 simple-pid
 spidev
 tifffile
