@@ -134,8 +134,8 @@
         <b>TEC</b>
         <br>
         <br>
-        <label for="tecStatus">Enable:</label>
-        <input id="tecStatus" type="checkbox">
+        <label for="newTecStatus">Enable:</label>
+        <input id="newTecStatus" type="checkbox">
         <br>
         <br>
         <label for="newSetpoint">Target Temperature (°C):</label>
@@ -184,7 +184,7 @@
         document.getElementById("newCapDelay").value = capDelayObj.value;
         document.getElementById("newCapAmount").value = capAmountObj.value;
         document.getElementById("newIntTime").value = Math.round(intTimeObj.value);
-        document.getElementById("tecStatus").checked = tecStatusObj.value;
+        document.getElementById("newTecStatus").checked = tecStatusObj.value;
         document.getElementById("newSetpoint").value = tecSetpointObj.value;
       } else if (dialog.returnValue === "submit") {
         writeValue("camera", "status", document.getElementById("newState").selectedIndex + 1);
@@ -194,8 +194,7 @@
         if (parseFloat(document.getElementById("newIntTime").value) > 0) {
           writeValue("camera", "integration_time", parseFloat(document.getElementById("newIntTime").value));
         }
-        let obj = await writeValue("tec", "status", document.getElementById("tecStatus").checked);
-        console.log(obj);
+        writeValue("tec", "status", document.getElementById("newTecStatus").checked);
         writeValue("tec", "pid_setpoint", document.getElementById("newSetpoint").value);
       }
     }
