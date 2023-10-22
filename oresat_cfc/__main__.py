@@ -3,7 +3,7 @@
 import os
 
 from olaf import app, olaf_run, olaf_setup, render_olaf_template, rest_api
-from oresat_od_db import OD_DB, NodeId
+from oresat_configs import OD_DB, NodeId
 
 from . import __version__
 from .drivers.pirt1280 import Pirt1280

@@ -23,7 +23,7 @@ dependencies = [
     "imagecodecs",
     "numpy",
     "opencv-python-headless==4.6.0.66",
-    "oresat-od-database",
+    "oresat-configs",
     "oresat-olaf>=3.0.0",
     "simple-pid",
     "spidev",
@@ -61,7 +61,7 @@ ignore = "C0103,E203,W0613,R0902,R901,R0913,R0914"
 max_line_length = 100
 
 [[tool.mypy.overrides]]
-module = "canopen,olaf,tifffile,spidev,oresat_od_db"
+module = "canopen,olaf,tifffile,spidev,oresat_configs"
 ignore_missing_imports = true
 
 [tool.isort]
