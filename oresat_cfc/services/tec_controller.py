@@ -50,6 +50,8 @@ class TecControllerService(Service):
         self._pid_outputs: list = []
         self._cooldown_temps: list = []
         self._graph_unix_times: list = []
+        self._maximum_graph_size: int = 10_000
+        self._graph_filename_save: str = "temperature_graph"
 
     def on_start(self):
         self.node.add_sdo_callbacks("tec", "status", self._on_read_status, self._on_write_status)
@@ -116,15 +118,15 @@ class TecControllerService(Service):
         self._target_temperatures.append(self._pid.setpoint)
         self._cooldown_temps.append(self._cooldown_temp_obj.value)
         self._graph_unix_times.append((time.time_ns() // 1000000) - self._start_time)
-        if len(self._current_temperatures) > 1024:
+        if len(self._current_temperatures) > self._maximum_graph_size:
             self._current_temperatures.pop(0)
-        if len(self._pid_outputs) > 1024:
+        if len(self._pid_outputs) > self._maximum_graph_size:
             self._pid_outputs.pop(0)
-        if len(self._target_temperatures) > 1024:
+        if len(self._target_temperatures) > self._maximum_graph_size:
             self._target_temperatures.pop(0)
-        if len(self._cooldown_temps) > 1024:
+        if len(self._cooldown_temps) > self._maximum_graph_size:
             self._cooldown_temps.pop(0)
-        if len(self._graph_unix_times) > 1024:
+        if len(self._graph_unix_times) > self._maximum_graph_size:
             self._graph_unix_times.pop(0)
 
         # update the lowest temperature
@@ -246,8 +248,8 @@ class TecControllerService(Service):
 
         # Adjust spacing between subplots
         plt.tight_layout()
-        plt.savefig("temperature_graph.jpg")
+        plt.savefig(f"/tmp/{self._graph_filename_save}.jpg")
         plt.close(fig)
-        with open('temperature_graph.jpg', 'rb') as image_file:
+        with open(f"/tmp/{self._graph_filename_save}.jpg", 'rb') as image_file:
             image_binary = image_file.read()
         return image_binary
