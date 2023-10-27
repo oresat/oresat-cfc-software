@@ -17,6 +17,7 @@ def camera_template():
     """Render the cfc template."""
     return render_olaf_template("cfc.html", name="CFC (Cirrus Flux Camera)")
 
+
 @rest_api.app.route("/pid-graph")
 def tec_template():
     """Render the tec template."""

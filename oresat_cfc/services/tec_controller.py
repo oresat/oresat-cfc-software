@@ -5,17 +5,19 @@ Seperate from the camera service as the camera can be used regaurdless if the TE
 not.
 """
 
+import time
+
 import canopen
-from olaf import Service, logger
-from simple_pid import PID
 import matplotlib
 import matplotlib.pyplot as plt
-import time
+from olaf import Service, logger
+from simple_pid import PID
 
 from ..drivers.pirt1280 import Pirt1280
 from ..drivers.rc625 import Rc625
 
 matplotlib.use("Agg")
+
 
 class TecControllerService(Service):
     """
@@ -231,25 +233,25 @@ class TecControllerService(Service):
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
 
         # Top subplot
-        ax1.plot(self._graph_unix_times, self._cooldown_temps, label='Cooldown Temp')
-        ax1.plot(self._graph_unix_times, self._target_temperatures, label='Target Temp')
-        ax1.plot(self._graph_unix_times, self._current_temperatures, label='Current Temp')
-        ax1.set_title('Temperatures')
-        ax1.set_xlabel('Time (ms)')
-        ax1.set_ylabel('Temperature (C)')
+        ax1.plot(self._graph_unix_times, self._cooldown_temps, label="Cooldown Temp")
+        ax1.plot(self._graph_unix_times, self._target_temperatures, label="Target Temp")
+        ax1.plot(self._graph_unix_times, self._current_temperatures, label="Current Temp")
+        ax1.set_title("Temperatures")
+        ax1.set_xlabel("Time (ms)")
+        ax1.set_ylabel("Temperature (C)")
         ax1.legend()
 
         # Bottom subplot
-        ax2.plot(self._graph_unix_times, self._pid_outputs, label='PID Output', color='red')
-        ax2.set_title('PID')
-        ax2.set_xlabel('Time (ms)')
-        ax2.set_ylabel('Amplitude')
+        ax2.plot(self._graph_unix_times, self._pid_outputs, label="PID Output", color="red")
+        ax2.set_title("PID")
+        ax2.set_xlabel("Time (ms)")
+        ax2.set_ylabel("Amplitude")
         ax2.legend()
 
         # Adjust spacing between subplots
         plt.tight_layout()
         plt.savefig(f"/tmp/{self._graph_filename_save}.jpg")
         plt.close(fig)
-        with open(f"/tmp/{self._graph_filename_save}.jpg", 'rb') as image_file:
+        with open(f"/tmp/{self._graph_filename_save}.jpg", "rb") as image_file:
             image_binary = image_file.read()
         return image_binary
