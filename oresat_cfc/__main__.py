@@ -3,7 +3,7 @@
 import os
 
 from olaf import app, olaf_run, olaf_setup, render_olaf_template, rest_api
-from oresat_configs import OD_DB, NodeId
+from oresat_configs import NodeId
 
 from . import __version__
 from .drivers.pirt1280 import Pirt1280
@@ -29,7 +29,7 @@ def main():
 
     path = os.path.dirname(os.path.abspath(__file__))
 
-    args = olaf_setup(OD_DB, NodeId.CFC)
+    args, _ = olaf_setup(NodeId.CFC)
     mock_args = [i.lower() for i in args.mock_hw]
     mock_camera = "camera" in mock_args or "all" in mock_args
     mock_tec = "tec" in mock_args or "all" in mock_args
