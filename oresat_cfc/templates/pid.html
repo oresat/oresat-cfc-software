@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    table {
+      font-family: arial, sans-serif;
+      border-collapse: collapse;
+      margin-left: auto;
+      margin-right: auto;
+      width: 80%;
+    }
+    td, th {
+      border: 1px solid #dddddd;
+      text-align: left;
+      padding: 8px;
+      width: 50%;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: 25% 50% 25%;
+    }
+    #gridColum {
+      text-align: center;
+    }
+    #image {
+      height: 80vh;
+    }
+  </style>
+<div id="grid">
+    <div id="gridColumn">
+        <!--only here for spacing-->
+    </div>
+    <div id="gridColumn">
+        <!--the "//:0" is a basically the way to make any empty img-->
+        <img id="image" src="//:0" alt="camera"/>
+        <br/>
+    </div>
+    <div id="gridColumn">
+        <h4>TEC (Thermoelectric Cooler) Controller</h4>
+        <table>
+            <tr>
+                <td>Enable Status</td>
+                <td><span id="tecStatus">DISABLED</span></td>
+            </tr>
+            <tr>
+                <td>Saturation Status</td>
+                <td><span id="tecSaturated">SATURATED</span></td>
+            </tr>
+            <tr>
+                <td>Target Temperature</td>
+                <td><span id="tecSetpoint">0</span> °C</td>
+            </tr>
+            <tr>
+                <td>Current Temperature</td>
+                <td><span id="cameraTemperature">0</span> °C</td>
+            </tr>
+            <tr>
+                <td>Cooldown Temperature</td>
+                <td><span id="cooldownTemperature">0</span> °C</td>
+            </tr>
+            <tr>
+                <td>PID - P</td>
+                <td><span id="pidProportional">0</span></td>
+            </tr>
+            <tr>
+                <td>PID - I</td>
+                <td><span id="pidIntegral">0</span></td>
+            </tr>
+            <tr>
+                <td>PID - D</td>
+                <td><span id="pidDerivative">0</span></td>
+            </tr>
+
+        </table>
+        <br/>
+        <div>
+            <button id="changeSettings">Change Settings</button>
+        </div>
+    </div>
+</div>
+<dialog id="favDialog">
+    <form method="dialog">
+        <p>
+            <b>Change Settings</b>
+            <br>
+            <br>
+            <b>TEC</b>
+            <br>
+            <br>
+            <label for="newTecStatus">Enable:</label>
+            <input id="newTecStatus" type="checkbox">
+            <br>
+            <br>
+            <label for="newSetpoint">Target Temperature (°C):</label>
+            <input id="newSetpoint" type="number" step="1">
+            <br>
+            <br>
+            <label for="newCooldownTemperature">Cooldown Temperature (°C):</label>
+            <input id="newCooldownTemperature" type="number" step="1">
+            <br>
+            <br>
+            <label for="newPidProportional">P Gain:</label>
+            <input id="newPidProportional" type="number" step="1">
+            <br>
+            <br>
+            <label for="newPidIntegral">I Gain:</label>
+            <input id="newPidIntegral" type="number" step="1">
+            <br>
+            <br>
+            <label for="newPidDerivative">D Gain:</label>
+            <input id="newPidDerivative" type="number" step="1">
+        </p>
+        <div>
+            <button id="cancel" type="reset">Cancel</button>
+            <button id="submit" type="submit">Set</button>
+        </div>
+    </form>
+</dialog>
+  <script>
+    let lastDisplayImage;
+    const settingsButton = document.getElementById("changeSettings");
+    const cancelButton = document.getElementById("cancel");
+    const submitButton = document.getElementById("submit");
+    const dialog = document.getElementById("favDialog");
+    dialog.returnValue = "cancel";
+
+    async function openCheck(dialog) {
+      if (dialog.open) {
+        const tecStatusObj = await readValue("tec", "status");
+        const tecSetpointObj = await readValue("tec", "pid_setpoint");
+        const tecCooldownObj = await readValue("tec", "cooldown_temperature");
+        const tecKpObj = await readValue("tec", "pid_kp");
+        const tecKiObj = await readValue("tec", "pid_ki");
+        const tecKdObj = await readValue("tec", "pid_kd");
+
+        document.getElementById("newTecStatus").checked = tecStatusObj.value;
+        document.getElementById("newSetpoint").value = tecSetpointObj.value;
+        document.getElementById("newCooldownTemperature").value = tecCooldownObj.value;
+        document.getElementById("newPidProportional").value = tecKpObj.value;
+        document.getElementById("newPidIntegral").value = tecKiObj.value;
+        document.getElementById("newPidDerivative").value = tecKdObj.value;
+      } else if (dialog.returnValue === "submit") {
+        writeValue("tec", "status", document.getElementById("newTecStatus").checked);
+        writeValue("tec", "pid_setpoint", document.getElementById("newSetpoint").value);
+        writeValue("tec", "cooldown_temperature", document.getElementById("newCooldownTemperature").value);
+        writeValue("tec", "pid_kp", document.getElementById("newPidProportional").value);
+        writeValue("tec", "pid_ki", document.getElementById("newPidIntegral").value);
+        writeValue("tec", "pid_kd", document.getElementById("newPidDerivative").value);
+      }
+    }
+
+    /** Update button opens a modal dialog */
+    settingsButton.addEventListener("click", () => {
+      dialog.showModal();
+      openCheck(dialog);
+    });
+
+    /** Form cancel button closes the dialog box */
+    cancelButton.addEventListener("click", () => {
+      dialog.close("cancel");
+      openCheck(dialog);
+    });
+
+    /** Form submit button closes the dialog box */
+    submitButton.addEventListener("click", () => {
+      dialog.close("submit");
+      openCheck(dialog);
+    });
+
+    /** Let the user download a file */
+    function downloadFile(filename, data) {
+      const byteCharacters = atob(data);
+      const byteArrays = [];
+      const sliceSize = 512;
+
+      for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+        const slice = byteCharacters.slice(offset, offset + sliceSize);
+
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+
+      const blob = new Blob(byteArrays, {
+        type: "application/octet-stream",
+      });
+
+      const a = document.createElement("a");
+      a.download = filename;
+      a.href = window.URL.createObjectURL(blob);
+      a.click();
+    }
+
+    /** Update all info / data being displayed */
+    async function update() {
+      let obj;
+
+      // get last image capture for display
+      obj = await readValue("tec", "pid_graph");
+      lastDisplayImage = obj.value;
+      document.getElementById("image").src = "data:image/jpg;base64, " + obj.value;
+
+      // update TEC info
+      obj = await readValue("camera", "temperature");
+      document.getElementById("cameraTemperature").innerHTML = obj.value;
+      obj = await readValue("tec", "cooldown_temperature");
+      document.getElementById("cooldownTemperature").innerHTML = obj.value;
+      obj = await readValue("tec", "pid_kp");
+      document.getElementById("pidProportional").innerHTML = obj.value.toFixed(3);
+      obj = await readValue("tec", "pid_ki");
+      document.getElementById("pidIntegral").innerHTML = obj.value.toFixed(3);
+      obj = await readValue("tec", "pid_kd");
+      document.getElementById("pidDerivative").innerHTML = obj.value.toFixed(3);
+      obj = await readValue("tec", "status");
+      if (obj.value === true) {
+        document.getElementById("tecStatus").innerHTML = "ENABLED";
+      } else {
+        document.getElementById("tecStatus").innerHTML = "DISABLED";
+      }
+      obj = await readValue("tec", "saturated");
+      if (obj.value) {
+        document.getElementById("tecSaturated").innerHTML = "SATURATED";
+      } else {
+        document.getElementById("tecSaturated").innerHTML = "NOT_SATURATED";
+      }
+      obj = await readValue("tec", "pid_setpoint");
+      document.getElementById("tecSetpoint").innerHTML = obj.value;
+    }
+
+    update();
+    const interval = setInterval(function() {
+      update();
+    }, 2500);
+  </script>
+{% endblock %}

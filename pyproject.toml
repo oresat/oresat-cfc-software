@@ -28,6 +28,7 @@ dependencies = [
     "simple-pid",
     "spidev",
     "tifffile",
+    "matplotlib",
 ]
 dynamic = ["version"]
 

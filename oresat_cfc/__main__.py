@@ -18,6 +18,12 @@ def camera_template():
     return render_olaf_template("cfc.html", name="CFC (Cirrus Flux Camera)")
 
 
+@rest_api.app.route("/pid-graph")
+def tec_template():
+    """Render the tec template."""
+    return render_olaf_template("pid.html", name="TEC PID")
+
+
 def main():
     """Main for cfc olaf app."""
 
@@ -45,6 +51,7 @@ def main():
     app.add_service(TecControllerService(pirt1280, rc6_25))
 
     rest_api.add_template(f"{path}/templates/cfc.html")
+    rest_api.add_template(f"{path}/templates/pid.html")
 
     olaf_run()
 
