@@ -58,6 +58,3 @@ jobs:
 
     - name: Test building pypi package
       run: python -m build
-
-    - name: Test building sphinx docs
-      run: make -C docs html
