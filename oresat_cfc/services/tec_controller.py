@@ -46,7 +46,7 @@ class TecControllerService(Service):
         self._cooldown_temp_obj: canopen.objectdictionary.Variable = None
         self._mv_avg_samples_obj: canopen.objectdictionary.Variable = None
 
-        self._start_time: int = None
+        self._start_time: int = 0
         self._target_temperatures: list = []
         self._current_temperatures: list = []
         self._pid_outputs: list = []
@@ -103,17 +103,8 @@ class TecControllerService(Service):
         # return the average
         return sum(self._samples) / len(self._samples)
 
-    def on_loop(self):
-        self.sleep(self._pid_delay_obj.value / 1000)
-
-        # only run tec controller alg when the camera and TEC controller are both enabled
-        if not self._camera.is_enabled or not self._controller_enabled:
-            self._tec.disable()
-            return
-
-        current_temp = self._camera.temperature
-        diff = self._pid(current_temp)
-        mv_avg = self._get_moving_average(current_temp)
+    def _update_graph_data(self, current_temp: float, diff: float, mv_avg: float):
+        """Update the local data for the graph."""
 
         self._current_temperatures.append(current_temp)
         self._pid_outputs.append(0 if diff < 0 else (100 if diff > 100 else diff))
@@ -130,6 +121,20 @@ class TecControllerService(Service):
             self._cooldown_temps.pop(0)
         if len(self._graph_unix_times) > self._maximum_graph_size:
             self._graph_unix_times.pop(0)
+
+    def on_loop(self):
+        self.sleep(self._pid_delay_obj.value / 1000)
+
+        # only run tec controller alg when the camera and TEC controller are both enabled
+        if not self._camera.is_enabled or not self._controller_enabled:
+            self._tec.disable()
+            return
+
+        current_temp = self._camera.temperature
+        diff = self._pid(current_temp)
+        mv_avg = self._get_moving_average(current_temp)
+
+        self._update_graph_data(current_temp, diff, mv_avg)
 
         # update the lowest temperature
         if current_temp < self._lowest_temp:
