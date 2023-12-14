@@ -10,7 +10,7 @@ from enum import IntEnum
 from time import sleep
 
 import numpy as np
-from olaf import Adc, Gpio, Pru
+from olaf import Adc, Gpio
 from spidev import SpiDev  # pylint: disable=E0611
 
 
@@ -102,8 +102,6 @@ class Pirt1280:
             self._spi = SpiDev()
             self._spi.open(spi_bus, spi_device)
             self._spi.max_speed_hz = self.SPI_HZ
-            self._pru0 = Pru(0)
-            self._pru1 = Pru(1)
 
         self._enabled = False
 
@@ -115,8 +113,6 @@ class Pirt1280:
 
         # set the enable GPIO high
         if not self._mock:
-            self._pru1.start()  # 1 before 0
-            self._pru0.start()
             self._gpio.high()
 
         self._enabled = True
@@ -137,8 +133,6 @@ class Pirt1280:
         """Disable the PIRT1280 (power it off)."""
 
         if not self._mock:
-            self._pru0.stop()
-            self._pru1.stop()
             self._gpio.low()
 
         self._enabled = False
