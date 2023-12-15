@@ -199,7 +199,9 @@ class CameraService(Service):
     def _on_read_cam_integration(self) -> int:
         """SDO read callback for camera integration time."""
 
-        return int(self._pirt1280.integration_time)
+        print(self._pirt1280.integration_time)
+
+        return self._pirt1280.integration_time
 
     def _on_write_cam_integration(self, value: int):
         """SDO write callback for camera integration time."""

@@ -8,6 +8,7 @@ import os
 import random
 from enum import IntEnum
 from time import sleep
+from typing import Union
 
 import numpy as np
 from olaf import Adc, Gpio
@@ -65,7 +66,7 @@ class Pirt1280:
     REG_WR = 0x40
     """OR with address to write"""
 
-    READ_BACK_WAIT = 0.1
+    READ_BACK_WAIT = 0.2
     """number of seconds to wait after writing a register before reading it back"""
 
     # refclk
@@ -94,7 +95,7 @@ class Pirt1280:
         self._mock = mock
         self._adc = Adc(adc_pin, mock)
         self._gpio = Gpio(gpio_num, mock=mock)
-        self._integration_time = -1.0  # reduce IO calls
+        self._integration_time = -1  # reduce IO calls
 
         if mock:
             self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
@@ -105,11 +106,11 @@ class Pirt1280:
 
         self._enabled = False
 
-    def __del__(self):
-        self.disable()
-
     def enable(self):
         """Enable the PIRT1280 (power it on)."""
+
+        if self._enabled:
+            return
 
         # set the enable GPIO high
         if not self._mock:
@@ -127,7 +128,7 @@ class Pirt1280:
         read_value = self._read_8b_reg(Pirt1280Register.CONF1.value)
         self._write_8b_reg(Pirt1280Register.CONF1.value, read_value & 0x3F)
 
-        self.integration_time = 1.0
+        self.integration_time = 1
 
     def disable(self):
         """Disable the PIRT1280 (power it off)."""
@@ -136,7 +137,7 @@ class Pirt1280:
             self._gpio.low()
 
         self._enabled = False
-        self._integration_time = -1.0
+        self._integration_time = -1
 
     @property
     def is_enabled(self) -> bool:
@@ -172,11 +173,15 @@ class Pirt1280:
                 f"0x{value:X} vs 0x{value_read:X}"
             )
 
-    def _write_16b_reg(self, reg: int, value: int):
+    def _write_16b_reg(self, reg: int, value: Union[int, list]):
         """Write a 16-bit int to a pair of registers."""
 
         # convert the value to little-endian bytes
-        b = value.to_bytes(2, "little")
+        if isinstance(value, list):
+            b = value
+            value = int.from_bytes(bytes(value), "little")
+        else:
+            b = list(value.to_bytes(2, "little"))
         reg0 = reg
         reg1 = reg + 1
 
@@ -199,7 +204,7 @@ class Pirt1280:
         if value != value_read:
             raise Pirt1280Error(
                 f"readback to regs {Pirt1280Register(reg).name} did not match "
-                f"0x{value:X} vs 0x{value_read:X}"
+                f"0x{value:04X} vs 0x{value_read:04X}"
             )
 
     def capture(self) -> bytes:
@@ -231,15 +236,15 @@ class Pirt1280:
         return bytes(imgbuf)
 
     @property
-    def integration_time(self) -> float:
+    def integration_time(self) -> int:
         """float: The integration time in milliseconds."""
 
         if self.is_enabled:
             return self._integration_time
-        return 0.0
+        return 0
 
     @integration_time.setter
-    def integration_time(self, value: float):
+    def integration_time(self, value: int):
         if value == self._integration_time:
             return  # nothing todo
 
@@ -265,17 +270,13 @@ class Pirt1280:
         # irb == integration_time reflcks bytes
         irb = intr_refclks.to_bytes(4, "little")
 
-        # write the frame time register
-        self._write_8b_reg(Pirt1280Register.FT0.value, frb[0])
-        self._write_8b_reg(Pirt1280Register.FT1.value, frb[1])
-        self._write_8b_reg(Pirt1280Register.FT2.value, frb[2])
-        self._write_8b_reg(Pirt1280Register.FT3.value, frb[3])
+        # write the frame time registers
+        self._write_16b_reg(Pirt1280Register.FT0.value, [frb[0], frb[1]])
+        self._write_16b_reg(Pirt1280Register.FT2.value, [frb[2], frb[3]])
 
-        # write the integration_time time register
-        self._write_8b_reg(Pirt1280Register.IT0.value, irb[0])
-        self._write_8b_reg(Pirt1280Register.IT1.value, irb[1])
-        self._write_8b_reg(Pirt1280Register.IT2.value, irb[2])
-        self._write_8b_reg(Pirt1280Register.IT3.value, irb[3])
+        # write the integration_time time registers
+        self._write_16b_reg(Pirt1280Register.IT0.value, [irb[0], irb[1]])
+        self._write_16b_reg(Pirt1280Register.IT2.value, [irb[2], irb[3]])
 
         self._integration_time = value
 

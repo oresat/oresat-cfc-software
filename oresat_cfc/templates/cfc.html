@@ -128,7 +128,7 @@
         <br>
         <br>
         <label for="newIntTime">Integration Time (ms):</label>
-        <input id="newIntTime" type="number" step="0.001">
+        <input id="newIntTime" type="number">
         <br>
         <br>
         <b>TEC</b>
@@ -192,7 +192,7 @@
         writeValue("camera", "number_to_capture", parseInt(document.getElementById("newCapAmount").value));
         writeValue("camera", "save_captures", document.getElementById("newCapSave").checked);
         if (parseFloat(document.getElementById("newIntTime").value) > 0) {
-          writeValue("camera", "integration_time", parseFloat(document.getElementById("newIntTime").value));
+          writeValue("camera", "integration_time", parseInt(document.getElementById("newIntTime").value));
         }
         writeValue("tec", "status", document.getElementById("newTecStatus").checked);
         writeValue("tec", "pid_setpoint", document.getElementById("newSetpoint").value);
