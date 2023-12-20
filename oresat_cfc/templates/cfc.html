@@ -187,7 +187,6 @@
         document.getElementById("newTecStatus").checked = tecStatusObj.value;
         document.getElementById("newSetpoint").value = tecSetpointObj.value;
       } else if (dialog.returnValue === "submit") {
-        writeValue("camera", "status", document.getElementById("newState").selectedIndex + 1);
         writeValue("camera", "capture_delay", parseInt(document.getElementById("newCapDelay").value));
         writeValue("camera", "number_to_capture", parseInt(document.getElementById("newCapAmount").value));
         writeValue("camera", "save_captures", document.getElementById("newCapSave").checked);
@@ -196,6 +195,7 @@
         }
         writeValue("tec", "status", document.getElementById("newTecStatus").checked);
         writeValue("tec", "pid_setpoint", document.getElementById("newSetpoint").value);
+        writeValue("camera", "status", document.getElementById("newState").selectedIndex + 1);
       }
     }
 
