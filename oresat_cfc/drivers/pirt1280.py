@@ -247,7 +247,7 @@ class Pirt1280:
 
     @integration_time.setter
     def integration_time(self, value: int):
-        if value == self._integration_time:
+        if not self.is_enabled or value == self._integration_time:
             return  # nothing todo
 
         # from the specified number of integration_time, get the number of integration_time

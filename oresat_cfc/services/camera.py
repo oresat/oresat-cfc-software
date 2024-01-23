@@ -199,8 +199,6 @@ class CameraService(Service):
     def _on_read_cam_integration(self) -> int:
         """SDO read callback for camera integration time."""
 
-        print(self._pirt1280.integration_time)
-
         return self._pirt1280.integration_time
 
     def _on_write_cam_integration(self, value: int):
@@ -211,6 +209,8 @@ class CameraService(Service):
     def _on_read_last_display_capture(self) -> bytes:
         """SDO read callback for display image."""
 
+        if not self._last_capture_obj.value:
+            return b""
         return make_display_image(self._last_capture_obj.value, sat_percent=95, downscale_factor=2)
 
     def _on_read_cam_enabled(self) -> bytes:
