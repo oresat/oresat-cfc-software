@@ -37,7 +37,7 @@ def main():
     camera_spi_bus = 1
     camera_spi_device = 1
     camera_enable_pin = "SENSOR_ENABLE"
-    camera_adc_num = 2
+    camera_adc_num = 0
     tec_enable_pin = "TEC_ENABLE"
 
     app.od["versions"]["sw_version"].value = __version__
