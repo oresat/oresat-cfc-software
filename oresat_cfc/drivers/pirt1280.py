@@ -88,6 +88,8 @@ class Pirt1280:
     R1 = 10_000
     """resistance of the upper resistor in the divider in ohms"""
 
+    INTEGRATION_TIME_MAX_US = 80_000
+
     def __init__(
         self, spi_bus: int, spi_device: int, gpio_num: int, adc_pin: int, mock: bool = False
     ):
@@ -130,7 +132,7 @@ class Pirt1280:
         read_value = self._read_8b_reg(Pirt1280Register.CONF1.value)
         self._write_8b_reg(Pirt1280Register.CONF1.value, read_value & 0x3F)
 
-        self.integration_time = 1
+        self.integration_time = 1000
 
     def disable(self):
         """Disable the PIRT1280 (power it off)."""
@@ -239,10 +241,10 @@ class Pirt1280:
 
     @property
     def integration_time(self) -> int:
-        """float: The integration time in milliseconds."""
+        """int: The integration time in microseconds."""
 
         if self.is_enabled:
-            return self._integration_time
+            return max(self._integration_time, 0)  # max removes the possible -1 flag value
         return 0
 
     @integration_time.setter
@@ -250,9 +252,15 @@ class Pirt1280:
         if not self.is_enabled or value == self._integration_time:
             return  # nothing todo
 
+        if value < 0 or value > self.INTEGRATION_TIME_MAX_US:
+            raise ValueError(
+                f"integration time must be between 1 and {self.INTEGRATION_TIME_MAX_US} "
+                "microseconds"
+            )
+
         # from the specified number of integration_time, get the number of integration_time
         # refclks, rounding down the float
-        intr_refclks = int((value / 1000) / self.REFCLK_CYCLE)
+        intr_refclks = int((value / 1_000_000) / self.REFCLK_CYCLE)
 
         # valueidate the integration_time time
         intr_refclks = max(intr_refclks, 513)

@@ -204,7 +204,10 @@ class CameraService(Service):
     def _on_write_cam_integration(self, value: int):
         """SDO write callback for camera integration time."""
 
-        self._pirt1280.integration_time = value
+        try:
+            self._pirt1280.integration_time = value
+        except ValueError as e:
+            logger.error(e)
 
     def _on_read_last_display_capture(self) -> bytes:
         """SDO read callback for display image."""
@@ -213,7 +216,7 @@ class CameraService(Service):
             return b""
         return make_display_image(self._last_capture_obj.value, sat_percent=95, downscale_factor=2)
 
-    def _on_read_cam_enabled(self) -> bytes:
+    def _on_read_cam_enabled(self) -> bool:
         """SDO read callback for camera enabled."""
 
         return self._pirt1280.is_enabled

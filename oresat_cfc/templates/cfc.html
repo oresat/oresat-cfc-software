@@ -66,7 +66,7 @@
         </tr>
         <tr>
           <td>Integration Time</td>
-          <td><span id="cameraIntegrationTime">0</span> ms</td>
+          <td><span id="cameraIntegrationTime">0</span> us</td>
         </tr>
         <tr>
           <td>Current Temperature</td>
@@ -127,8 +127,8 @@
         <b>Camera</b>
         <br>
         <br>
-        <label for="newIntTime">Integration Time (ms):</label>
-        <input id="newIntTime" type="number">
+        <label for="newIntTime">Integration Time (us) [Max: 80000]:</label>
+        <input id="newIntTime" type="number" min=1 max=80000>
         <br>
         <br>
         <b>TEC</b>
@@ -171,12 +171,15 @@
         if (stateStr === "OFF") {
           document.getElementById("newStateSTANDBY").disabled = false;
           document.getElementById("newStateCAPTURE").disabled = true;
+          document.getElementById("newIntTime").disabled = true;
         } else if (stateStr === "STANDBY" || stateStr === "CAPTURE") {
           document.getElementById("newStateSTANDBY").disabled = false;
           document.getElementById("newStateCAPTURE").disabled = false;
+          document.getElementById("newIntTime").disabled = false;
         } else {
           document.getElementById("newStateSTANDBY").disabled = true;
           document.getElementById("newStateCAPTURE").disabled = true;
+          document.getElementById("newIntTime").disabled = true;
         }
 
         document.getElementById("newState").selectedIndex = state - 1;
