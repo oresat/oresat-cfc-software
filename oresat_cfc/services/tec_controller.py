@@ -80,9 +80,8 @@ class TecControllerService(Service):
             Kp=rec["pid_kp"].value,
             Ki=rec["pid_ki"].value,
             Kd=rec["pid_kd"].value,
-            setpoint=rec["pid_setpoint"].value,
-            sample_time=self._pid_delay_obj.value,
         )
+        self._pid.setpoint = rec["pid_setpoint"].value
 
     def on_stop(self):
         self._tec.disable()
@@ -125,11 +124,6 @@ class TecControllerService(Service):
     def on_loop(self):
         self.sleep(self._pid_delay_obj.value / 1000)
 
-        # only run tec controller alg when the camera and TEC controller are both enabled
-        if not self._camera.is_enabled or not self._controller_enabled:
-            self._tec.disable()
-            return
-
         current_temp = self._camera.temperature
         diff = self._pid(current_temp)
         mv_avg = self._get_moving_average(current_temp)
@@ -144,6 +138,11 @@ class TecControllerService(Service):
             f"target: {self._pid.setpoint} / current: {current_temp} / "
             f"lowest: {self._lowest_temp} / mv avg: {mv_avg} / PID diff: {diff}"
         )
+
+        # only run tec controller alg when the camera and TEC controller are both enabled
+        if not self._camera.is_enabled or not self._controller_enabled:
+            self._tec.disable()
+            return
 
         # don"t even try to control the TEC if above the cooldown temperature
         if current_temp >= self._cooldown_temp_obj.value:
