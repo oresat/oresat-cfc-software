@@ -125,7 +125,7 @@ class Pirt1280:
         self._write_16b_reg(Pirt1280Register.ROFF0.value, 8)
         self._write_16b_reg(Pirt1280Register.COFF0.value, 8)
         self._write_16b_reg(Pirt1280Register.HB0.value, 32)
-        self._write_8b_reg(Pirt1280Register.VHI.value, 224)
+        self._write_8b_reg(Pirt1280Register.VHI.value, 244)
         self._write_8b_reg(Pirt1280Register.VLO.value, 68)
 
         # output mode 1
