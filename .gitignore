@@ -128,5 +128,11 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# eds-editor
-*.tmp
+# Vim
+*.swp
+
+# MacOS
+.DS_Store
+
+# setuptools-scm
+_version.py

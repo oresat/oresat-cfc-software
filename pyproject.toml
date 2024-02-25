@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -35,14 +35,14 @@ dynamic = ["version"]
 [project.scripts]
 oresat-cfc = "oresat_cfc.__main__:main"
 
-[tool.setuptools.dynamic]
-version = {attr = "oresat_cfc.__version__"}
-
 [tool.setuptools.packages.find]
 exclude = ["docs*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.html"]
+
+[tool.setuptools_scm]
+write_to = "oresat_cfc/_version.py"
 
 [tool.black]
 line_length = 100
