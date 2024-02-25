@@ -131,8 +131,7 @@ class TecControllerService(Service):
         self._update_graph_data(current_temp, diff, mv_avg)
 
         # update the lowest temperature
-        if current_temp < self._lowest_temp:
-            self._lowest_temp = current_temp
+        self._lowest_temp = min(self._lowest_temp, current_temp)
 
         logger.debug(
             f"target: {self._pid.setpoint} / current: {current_temp} / "
