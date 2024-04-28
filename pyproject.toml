@@ -24,7 +24,7 @@ dependencies = [
     "numpy",
     "opencv-python-headless==4.6.0.66",
     "oresat-configs",
-    "oresat-olaf>=3.0.0",
+    "oresat-olaf>=3.4.0",
     "simple-pid",
     "spidev",
     "tifffile",
