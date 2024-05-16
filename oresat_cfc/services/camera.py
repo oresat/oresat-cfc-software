@@ -6,7 +6,7 @@ enabled or not.
 """
 
 from enum import IntEnum
-from time import time
+from time import monotonic, time
 
 import canopen
 import cv2
@@ -27,6 +27,8 @@ class CameraState(IntEnum):
     """Camera is on, but no doing anything"""
     CAPTURE = 0x3
     """Camera is capturing image and saving them to freac cache"""
+    BOOT_LOCKOUT = 0x4
+    """Camera is locked out until system is done booting and PRUs are available."""
     ERROR = 0xFF
     """Error with camera hardware"""
 
@@ -40,6 +42,7 @@ STATE_TRANSMISSIONS = {
         CameraState.CAPTURE,
         CameraState.ERROR,
     ],
+    CameraState.BOOT_LOCKOUT: [CameraState.OFF],
     CameraState.ERROR: [CameraState.OFF, CameraState.ERROR],
 }
 """Valid state transistions."""
@@ -48,10 +51,12 @@ STATE_TRANSMISSIONS = {
 class CameraService(Service):
     """Service for camera and capture state machine"""
 
+    _BOOT_LOCKOUT_S = 70
+
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
 
-        self._state = CameraState.OFF
+        self._state = CameraState.BOOT_LOCKOUT
         self._next_state_internal = -1
         self._next_state_user = -1
 
@@ -121,6 +126,10 @@ class CameraService(Service):
         self._state = new_state
 
     def on_loop(self):
+
+        if self._state == CameraState.BOOT_LOCKOUT and monotonic() > self._BOOT_LOCKOUT_S:
+            self._next_state_internal = CameraState.OFF.value
+
         if self._next_state_internal != -1:
             self._state_machine_transition(self._next_state_internal)
             self._next_state_internal = -1
@@ -128,7 +137,12 @@ class CameraService(Service):
             self._state_machine_transition(self._next_state_user)
             self._next_state_user = -1
 
-        if self._state in [CameraState.OFF, CameraState.STANDBY, CameraState.ERROR]:
+        if self._state in [
+            CameraState.OFF,
+            CameraState.STANDBY,
+            CameraState.ERROR,
+            CameraState.BOOT_LOCKOUT,
+        ]:
             self.sleep(0.1)
         elif self._state == CameraState.CAPTURE:
             self._count += 1

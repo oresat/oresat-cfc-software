@@ -34,15 +34,15 @@
       <!--the "//:0" is a basically the way to make any empty img-->
       <img id="image" src="//:0" alt="camera"/>
       <br/>
-      <button onclick="downloadRawImage()">Download Raw Image</button>
-      <button onclick="downloadDisplayImage()">Download Display Image</button>
+      <button id="downloadRawImageButton" onclick="downloadRawImage()" disabled>Download Raw Image</button>
+      <button id="downloadDisplayImageButton" onclick="downloadDisplayImage()" disabled>Download Display Image</button>
     </div>
     <div id="gridColumn">
       <h4>State Machine</h4>
       <table>
         <tr>
           <td>Status</td>
-          <td><span id="cfcState">OFF</span></td>
+          <td><span id="cfcState">BOOT_LOCKOUT</span></td>
         </tr>
         <tr>
           <td>Capture Delay</td>
@@ -91,7 +91,7 @@
       </table>
       <br />
       <div>
-        <button id="changeSettings">Change Settings</button>
+        <button id="changeSettingsButton" disabled>Change Settings</button>
       </div>
     </div>
   </div>
@@ -149,7 +149,7 @@
   </dialog>
   <script>
     let lastDisplayImage;
-    const settingsButton = document.getElementById("changeSettings");
+    const settingsButton = document.getElementById("changeSettingsButton");
     const cancelButton = document.getElementById("cancel");
     const submitButton = document.getElementById("submit");
     const dialog = document.getElementById("favDialog");
@@ -265,6 +265,7 @@
       0x01: "OFF",
       0x02: "STANDBY",
       0x03: "CAPTURE",
+      0x04: "BOOT_LOCKOUT",
       0xFF: "ERROR",
     };
     let lastCapture = 0;
@@ -286,6 +287,16 @@
         document.getElementById("saveCaptures").innerHTML = "TRUE";
       } else {
         document.getElementById("saveCaptures").innerHTML = "FALSE";
+      }
+
+      if (state === "BOOT_LOCKOUT") {
+        document.getElementById("changeSettingsButton").disabled = true;
+        document.getElementById("downloadRawImageButton").disabled = true;
+        document.getElementById("downloadDisplayImageButton").disabled = true;
+      } else {
+        document.getElementById("changeSettingsButton").disabled = false;
+        document.getElementById("downloadRawImageButton").disabled = false;
+        document.getElementById("downloadDisplayImageButton").disabled = false;
       }
 
       // get last image capture for display
