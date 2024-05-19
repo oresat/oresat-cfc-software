@@ -1,6 +1,5 @@
 black
 build
-imagecodecs
 isort
 matplotlib
 numpy
