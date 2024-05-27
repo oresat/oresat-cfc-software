@@ -12,7 +12,7 @@ import subprocess
 from enum import Enum, unique
 from pathlib import Path
 from threading import Timer
-from time import sleep
+from time import sleep, monotonic
 from typing import Union
 
 import numpy as np
@@ -126,7 +126,29 @@ class Pirt1280:
 
     INTEGRATION_TIME_MAX_US = 80_000
 
-    def load_kernel_module(self):
+    def __init__(
+        self, spi_bus: int, spi_device: int, gpio_num: int, adc_pin: int, mock: bool = False
+    ):
+        self._gpio_num = gpio_num
+        self._mock = mock
+        self._adc = Adc(adc_pin, mock)
+        self._gpio = Gpio(gpio_num, mock=mock)
+        self._integration_time = -1  # reduce IO calls
+        self._state = Pirt1280_State.BOOT_LOCKOUT
+
+        uptimer = Timer(90.0 - monotonic(), self.unlock)
+        uptimer.start()
+
+        if mock:
+            self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
+        else:
+            self._spi = SpiDev()
+            self._spi.open(spi_bus, spi_device)
+            self._spi.max_speed_hz = self.SPI_HZ
+
+        self._enabled = False
+
+    def unlock(self):
         # check if kernel module is loaded
         mod_check = subprocess.run(
             "lsmod | grep prucam", capture_output=True, shell=True, check=False, text=True
@@ -182,7 +204,10 @@ class Pirt1280:
 
         # no errors detected; continue
         self._state = Pirt1280_State.ON
+        
+        #?
         self._image_size = self.read_image_size()
+        
         logger.info("Kernel module processes sucessful")
 
     # def _state_machine_transition(self, new_state: Union[Pirt1280_State, int]):
@@ -215,25 +240,6 @@ class Pirt1280:
     #     logger.info(f"state transistion {self._state.name} -> {new_state.name}")
 
     #     self._state = new_state
-
-    def __init__(
-        self, spi_bus: int, spi_device: int, gpio_num: int, adc_pin: int, mock: bool = False
-    ):
-        self._gpio_num = gpio_num
-        self._mock = mock
-        self._adc = Adc(adc_pin, mock)
-        self._gpio = Gpio(gpio_num, mock=mock)
-        self._integration_time = -1  # reduce IO calls
-        self._state = Pirt1280_State.BOOT_LOCKOUT
-
-        if mock:
-            self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
-        else:
-            self._spi = SpiDev()
-            self._spi.open(spi_bus, spi_device)
-            self._spi.max_speed_hz = self.SPI_HZ
-
-        self._enabled = False
 
     def enable(self):
         """Enable the PIRT1280 (power it on)."""
