@@ -2,16 +2,21 @@
 The PIRT1280 SWIR (short-wave infrared) camera driver.
 """
 
+import glob
 import io
 import math as m
 import os
+import platform
 import random
-from enum import IntEnum
+import subprocess
+from enum import Enum, unique
+from pathlib import Path
+from threading import Timer
 from time import sleep
 from typing import Union
 
 import numpy as np
-from olaf import Adc, Gpio
+from olaf import Adc, Gpio, logger
 from spidev import SpiDev  # pylint: disable=E0611
 
 
@@ -19,7 +24,7 @@ class Pirt1280Error(Exception):
     """An error with Pirt1280"""
 
 
-class Pirt1280Register(IntEnum):
+class Pirt1280Register(Enum):
     """PIRT1280 register addresses"""
 
     COM = 1
@@ -51,6 +56,37 @@ class Pirt1280Register(IntEnum):
     CONF4 = 49
 
 
+@unique
+class Pirt1280_State(Enum):
+    """All the states for CFC camera."""
+
+    OFF = 0x1
+    """Camera is off"""
+    ON = 0x2
+    """Camera is on, but no doing anything"""
+    # CAPTURE = 0x3
+    # """Camera is capturing image and saving them to freac cache"""
+    BOOT_LOCKOUT = 0x3
+    """Camera is locked out until system is done booting and PRUs are available."""
+    ERROR = 0xFF
+    """Error with camera hardware"""
+
+
+STATE_TRANSMISSIONS = {
+    Pirt1280_State.OFF: [Pirt1280_State.OFF, Pirt1280_State.ON],
+    Pirt1280_State.ON: [Pirt1280_State.OFF, Pirt1280_State.ON, Pirt1280_State.CAPTURE],
+    Pirt1280_State.CAPTURE: [
+        Pirt1280_State.OFF,
+        Pirt1280_State.ON,
+        Pirt1280_State.CAPTURE,
+        Pirt1280_State.ERROR,
+    ],
+    Pirt1280_State.BOOT_LOCKOUT: [Pirt1280_State.OFF],
+    Pirt1280_State.ERROR: [Pirt1280_State.OFF, Pirt1280_State.ERROR],
+}
+"""Valid state transistions."""
+
+
 class Pirt1280:
     """The PIRT1280 SWIR camera"""
 
@@ -59,7 +95,7 @@ class Pirt1280:
     BYTES_PER_PIXEL = 2
     PIXEL_BYTES = COLS * ROWS * BYTES_PER_PIXEL
 
-    PRUCAM_PATH = "/dev/prucam"
+    PRUCAM_PATH = Path("/dev/prucam")
 
     SPI_HZ = 100_000
 
@@ -90,6 +126,96 @@ class Pirt1280:
 
     INTEGRATION_TIME_MAX_US = 80_000
 
+    def load_kernel_module(self):
+        # check if kernel module is loaded
+        mod_check = subprocess.run(
+            "lsmod | grep prucam", capture_output=True, shell=True, check=False, text=True
+        )
+        if mod_check.returncode not in [0, 1]:  # error
+            self._state = Pirt1280_State.ERROR
+            logger.error("Camera module not found")
+            return
+
+        def load_kernel_module():
+            logger.info("Building & installing kernel module")
+            # if kernel module is not loaded; compile and insert it
+            temp_path = glob.glob("/usr/src/prucam*")
+            if len(temp_path) != 1:
+                self._state = Pirt1280_State.ERROR
+                logger.error("Kernel module install path not found")
+                return
+            install_path = temp_path[0]
+
+            base_path = os.path.basename(install_path)
+            dkms_module = base_path.replace("-", "/")
+            release = platform.release()
+            build_path = f"/var/lib/dkms/{dkms_module}/{release}/armv7l/module/prucam.ko.xz"
+            build_mod = subprocess.run(
+                f"dkms build {dkms_module}",
+                capture_output=True,
+                shell=True,
+                check=False,
+            )
+            ins_mod = subprocess.run(
+                f"insmod {build_path}", capture_output=True, shell=True, check=False
+            )
+            if build_mod.returncode != 0 or ins_mod.returncode != 0:
+                self._state = Pirt1280_State.ERROR
+                logger.error("Error building/inserting kernel module")
+                return
+
+        if not mod_check.stdout:
+            load_kernel_module()
+            sleep(5)
+            rm_mod = subprocess.run("rmmod prucam", capture_output=True, shell=True, check=False)
+            if rm_mod.returncode != 0:
+                self._state = Pirt1280_State.ERROR
+                logger.error("Error removing kernel module")
+                return
+            load_kernel_module()
+
+        sleep(0.5)
+        if not self.PRUCAM_PATH.exists():
+            self._state = Pirt1280_State.ERROR
+            logger.error("Could not find capture path")
+            return
+
+        # no errors detected; continue
+        self._state = Pirt1280_State.ON
+        self._image_size = self.read_image_size()
+        logger.info("Kernel module processes sucessful")
+
+    # def _state_machine_transition(self, new_state: Union[Pirt1280_State, int]):
+    #     """Transition from one state to another."""
+
+    #     if new_state not in list(Pirt1280_State):
+    #         logger.error(f"invalid new state {new_state}")
+    #         return
+
+    #     if isinstance(new_state, int):
+    #         new_state = Pirt1280_State(new_state)
+
+    #     if new_state not in STATE_TRANSMISSIONS[self._state]:
+    #         logger.error(f"invalid state transistion {self._state.name} -> {new_state.name}")
+    #         return
+
+    #     try:
+    #         if self._state == Pirt1280_State.BOOT_LOCKOUT and new_state == Pirt1280_State.OFF:
+    #             self.load_kernel_module()
+    #         elif new_state in [Pirt1280_State.OFF, Pirt1280_State.ERROR]:
+    #             self._pirt1280.disable()
+    #         elif new_state == Pirt1280_State.ON:
+    #             self._pirt1280.enable()
+    #         # elif new_state == Pirt1280_State.CAPTURE:
+    #         #     self._count = 0
+    #     except Pirt1280Error as e:
+    #         logger.exception(e)
+    #         new_state = Pirt1280_State.ERROR
+
+    #     logger.info(f"state transistion {self._state.name} -> {new_state.name}")
+
+    #     self._state = new_state
+
     def __init__(
         self, spi_bus: int, spi_device: int, gpio_num: int, adc_pin: int, mock: bool = False
     ):
@@ -98,6 +224,7 @@ class Pirt1280:
         self._adc = Adc(adc_pin, mock)
         self._gpio = Gpio(gpio_num, mock=mock)
         self._integration_time = -1  # reduce IO calls
+        self._state = Pirt1280_State.BOOT_LOCKOUT
 
         if mock:
             self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
@@ -225,7 +352,7 @@ class Pirt1280:
             return bytes([random.randint(0, 255) for i in range(self.PIXEL_BYTES)])
 
         # open the prucam char device
-        fd = os.open(self.PRUCAM_PATH, os.O_RDWR)
+        fd = os.open(str(self.PRUCAM_PATH), os.O_RDWR)
         fio = io.FileIO(fd, closefd=False)
 
         # allocate buffer to read frame into

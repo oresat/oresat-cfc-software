@@ -5,7 +5,6 @@ Seperate from the TEC controller service as the camera can be used regaurdless i
 enabled or not.
 """
 
-from enum import IntEnum
 from time import monotonic, time
 
 import canopen
@@ -15,37 +14,7 @@ import tifffile
 from olaf import Service, logger, new_oresat_file
 
 from .. import __version__
-from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
-
-
-class CameraState(IntEnum):
-    """All the states for CFC camera."""
-
-    OFF = 0x1
-    """Camera is off"""
-    STANDBY = 0x2
-    """Camera is on, but no doing anything"""
-    CAPTURE = 0x3
-    """Camera is capturing image and saving them to freac cache"""
-    BOOT_LOCKOUT = 0x4
-    """Camera is locked out until system is done booting and PRUs are available."""
-    ERROR = 0xFF
-    """Error with camera hardware"""
-
-
-STATE_TRANSMISSIONS = {
-    CameraState.OFF: [CameraState.OFF, CameraState.STANDBY],
-    CameraState.STANDBY: [CameraState.OFF, CameraState.STANDBY, CameraState.CAPTURE],
-    CameraState.CAPTURE: [
-        CameraState.OFF,
-        CameraState.STANDBY,
-        CameraState.CAPTURE,
-        CameraState.ERROR,
-    ],
-    CameraState.BOOT_LOCKOUT: [CameraState.OFF],
-    CameraState.ERROR: [CameraState.OFF, CameraState.ERROR],
-}
-"""Valid state transistions."""
+from ..drivers.pirt1280 import Pirt1280, Pirt1280_State, Pirt1280Error, pirt1280_raw_to_numpy
 
 
 class CameraService(Service):
@@ -56,7 +25,7 @@ class CameraService(Service):
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
 
-        self._state = CameraState.BOOT_LOCKOUT
+        self._state = Pirt1280_State.BOOT_LOCKOUT
         self._next_state_internal = -1
         self._next_state_user = -1
 
@@ -96,39 +65,9 @@ class CameraService(Service):
     def on_stop(self):
         self._pirt1280.disable()
 
-    def _state_machine_transition(self, new_state: [CameraState, int]):
-        """Transition from one state to another."""
-
-        if new_state not in list(CameraState):
-            logger.error(f"invalid new state {new_state}")
-            return
-
-        if isinstance(new_state, int):
-            new_state = CameraState(new_state)
-
-        if new_state not in STATE_TRANSMISSIONS[self._state]:
-            logger.error(f"invalid state transistion {self._state.name} -> {new_state.name}")
-            return
-
-        try:
-            if new_state in [CameraState.OFF, CameraState.ERROR]:
-                self._pirt1280.disable()
-            elif new_state == CameraState.STANDBY:
-                self._pirt1280.enable()
-            elif new_state == CameraState.CAPTURE:
-                self._count = 0
-        except Pirt1280Error as e:
-            logger.exception(e)
-            new_state = CameraState.ERROR
-
-        logger.info(f"state transistion {self._state.name} -> {new_state.name}")
-
-        self._state = new_state
-
     def on_loop(self):
-
-        if self._state == CameraState.BOOT_LOCKOUT and monotonic() > self._BOOT_LOCKOUT_S:
-            self._next_state_internal = CameraState.OFF.value
+        if self._state == Pirt1280_State.BOOT_LOCKOUT and monotonic() > self._BOOT_LOCKOUT_S:
+            self._next_state_internal = Pirt1280_State.OFF.value
 
         if self._next_state_internal != -1:
             self._state_machine_transition(self._next_state_internal)
@@ -138,33 +77,33 @@ class CameraService(Service):
             self._next_state_user = -1
 
         if self._state in [
-            CameraState.OFF,
-            CameraState.STANDBY,
-            CameraState.ERROR,
-            CameraState.BOOT_LOCKOUT,
+            Pirt1280_State.OFF,
+            Pirt1280_State.ON,
+            Pirt1280_State.BOOT_LOCKOUT,
+            Pirt1280_State.ERROR,
         ]:
             self.sleep(0.1)
-        elif self._state == CameraState.CAPTURE:
+        elif self._state == Pirt1280_State.CAPTURE:
             self._count += 1
 
             try:
                 self._capture()
             except Pirt1280Error:
-                self._next_state_internal = CameraState.ERROR.value
+                self._next_state_internal = Pirt1280_State.ERROR.value
                 return
 
             if self._capture_count_obj.value != 0 and self._count >= self._capture_count_obj.value:
                 # that was the last capture in a sequence requested
-                self._next_state_internal = CameraState.STANDBY.value
+                self._next_state_internal = Pirt1280_State.STANDBY.value
             else:  # no limit
                 self.sleep(self._capture_delay_obj.value / 1000)
         else:
             logger.error(f"was in unknown state {self._state}, resetting to OFF")
-            self._next_state_internal = CameraState.OFF.value
+            self._next_state_internal = Pirt1280_State.OFF.value
 
     def on_loop_error(self, error: Exception):
         logger.exception(error)
-        self._state_machine_transition(CameraState.ERROR)
+        self._state_machine_transition(Pirt1280_State.ERROR)
 
     def _capture(self, count: int = 1):
         """Capture x raw images in a row with no delay and save them to fread cache"""
