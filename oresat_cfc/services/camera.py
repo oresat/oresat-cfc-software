@@ -25,6 +25,7 @@ class CameraService(Service):
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
 
+        # internal wins over user
         self._state = Pirt1280_State.BOOT_LOCKOUT
         self._next_state_internal = -1
         self._next_state_user = -1
@@ -36,11 +37,14 @@ class CameraService(Service):
         self._capture_save_obj: canopen.objectdictionary.Variable = None
         self._last_capture_obj: canopen.objectdictionary.Variable = None
         self._last_capture_time_obj: canopen.objectdictionary.Variable = None
+        self._start_capture_sequence_obj: canopen.objectdictionary.Variable = None
 
         self._count = 0
 
     def on_start(self):
         rec = self.node.od["camera"]
+        self._start_capture_sequence_obj = rec["start_capture_sequence"]
+        self._start_capture_sequence_obj.value = False
         self._capture_delay_obj = rec["capture_delay"]
         self._capture_count_obj = rec["number_to_capture"]
         self._capture_save_obj = rec["save_captures"]
@@ -49,7 +53,8 @@ class CameraService(Service):
         self._last_capture_time_obj = rec["last_capture_time"]
         self._last_capture_time_obj.value = 0
 
-        self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
+        # self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
+        # self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
         self.node.add_sdo_callbacks(
             "camera",
             "integration_time",
@@ -61,49 +66,37 @@ class CameraService(Service):
             "camera", "last_display_image", self._on_read_last_display_capture, None
         )
         self.node.add_sdo_callbacks("camera", "enabled", self._on_read_cam_enabled, None)
+        self.node.add_sdo_callbacks("camera", "enabled", self._on_read_cam_enabled, None)
 
     def on_stop(self):
         self._pirt1280.disable()
 
     def on_loop(self):
-        if self._state == Pirt1280_State.BOOT_LOCKOUT and monotonic() > self._BOOT_LOCKOUT_S:
-            self._next_state_internal = Pirt1280_State.OFF.value
-
-        if self._next_state_internal != -1:
-            self._state_machine_transition(self._next_state_internal)
-            self._next_state_internal = -1
-        elif self._next_state_user != -1:
-            self._state_machine_transition(self._next_state_user)
-            self._next_state_user = -1
-
-        if self._state in [
-            Pirt1280_State.OFF,
-            Pirt1280_State.ON,
-            Pirt1280_State.BOOT_LOCKOUT,
-            Pirt1280_State.ERROR,
-        ]:
-            self.sleep(0.1)
-        elif self._state == Pirt1280_State.CAPTURE:
+        if self._start_capture_sequence_obj.value is True:
             self._count += 1
+            self.sleep(self._capture_delay_obj.value / 1000)
 
             try:
                 self._capture()
             except Pirt1280Error:
-                self._next_state_internal = Pirt1280_State.ERROR.value
+                logger.error("could not initiate Pirt1280 capture")
+                self._start_capture_sequence_obj.value = False
                 return
 
             if self._capture_count_obj.value != 0 and self._count >= self._capture_count_obj.value:
                 # that was the last capture in a sequence requested
-                self._next_state_internal = Pirt1280_State.STANDBY.value
+                self._start_capture_sequence_obj.value = False
+                return
             else:  # no limit
                 self.sleep(self._capture_delay_obj.value / 1000)
         else:
-            logger.error(f"was in unknown state {self._state}, resetting to OFF")
-            self._next_state_internal = Pirt1280_State.OFF.value
+            logger.info("entered on loop while capture sequence is False")
+            self._start_capture_sequence_obj.value = False
+            self.sleep(self._capture_delay_obj.value / 1000)
 
     def on_loop_error(self, error: Exception):
         logger.exception(error)
-        self._state_machine_transition(Pirt1280_State.ERROR)
+        self._start_capture_sequence_obj.value = False
 
     def _capture(self, count: int = 1):
         """Capture x raw images in a row with no delay and save them to fread cache"""
@@ -134,15 +127,15 @@ class CameraService(Service):
 
             self.node.fread_cache.add(file_name, consume=True)
 
-    def _on_read_status(self) -> int:
-        """SDO read callback for status"""
+    # def _on_read_status(self) -> int:
+    #     """SDO read callback for status"""
 
-        return self._state.value
+    #     return self._state.value
 
-    def _on_write_status(self, value: int):
-        """SDO write callback for status"""
+    # def _on_write_status(self, value: int):
+    #     """SDO write callback for status"""
 
-        self._next_state_user = value
+    #     self._next_state_user = value
 
     def _on_read_cam_temp(self) -> int:
         """SDO read callback for camera temperature."""
