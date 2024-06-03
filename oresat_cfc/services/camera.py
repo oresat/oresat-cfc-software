@@ -14,22 +14,14 @@ import tifffile
 from olaf import Service, logger, new_oresat_file
 
 from .. import __version__
-from ..drivers.pirt1280 import Pirt1280, Pirt1280_State, Pirt1280Error, pirt1280_raw_to_numpy
+from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
 
 
 class CameraService(Service):
     """Service for camera and capture state machine"""
-
-    _BOOT_LOCKOUT_S = 70
-
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
-
-        # internal wins over user
-        self._state = Pirt1280_State.BOOT_LOCKOUT
-        self._next_state_internal = -1
-        self._next_state_user = -1
-
+        
         self._pirt1280 = pirt1280
 
         self._capture_delay_obj: canopen.objectdictionary.Variable = None
