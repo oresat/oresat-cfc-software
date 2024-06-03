@@ -5,7 +5,7 @@ Seperate from the TEC controller service as the camera can be used regaurdless i
 enabled or not.
 """
 
-from time import monotonic, time
+from time import time
 
 import canopen
 import cv2
@@ -88,7 +88,7 @@ class CameraService(Service):
 
     def on_loop_error(self, error: Exception):
         logger.exception(error)
-        self._start_capture_sequence_obj.value = False
+        # self._start_capture_sequence_obj.value = False
 
     def _capture(self, count: int = 1):
         """Capture x raw images in a row with no delay and save them to fread cache"""
@@ -118,16 +118,6 @@ class CameraService(Service):
             )
 
             self.node.fread_cache.add(file_name, consume=True)
-
-    # def _on_read_status(self) -> int:
-    #     """SDO read callback for status"""
-
-    #     return self._state.value
-
-    # def _on_write_status(self, value: int):
-    #     """SDO write callback for status"""
-
-    #     self._next_state_user = value
 
     def _on_read_cam_temp(self) -> int:
         """SDO read callback for camera temperature."""
