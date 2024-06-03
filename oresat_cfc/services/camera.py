@@ -21,7 +21,7 @@ class CameraService(Service):
     """Service for camera and capture state machine"""
     def __init__(self, pirt1280: Pirt1280):
         super().__init__()
-        
+
         self._pirt1280 = pirt1280
 
         self._capture_delay_obj: canopen.objectdictionary.Variable = None
@@ -35,8 +35,6 @@ class CameraService(Service):
 
     def on_start(self):
         rec = self.node.od["camera"]
-        self._start_capture_sequence_obj = rec["start_capture_sequence"]
-        self._start_capture_sequence_obj.value = False
         self._capture_delay_obj = rec["capture_delay"]
         self._capture_count_obj = rec["number_to_capture"]
         self._capture_save_obj = rec["save_captures"]
@@ -44,6 +42,8 @@ class CameraService(Service):
         self._last_capture_obj = rec["last_capture"]
         self._last_capture_time_obj = rec["last_capture_time"]
         self._last_capture_time_obj.value = 0
+        self._start_capture_sequence_obj = rec["start_capture_sequence"]
+        self._start_capture_sequence_obj.value = False
 
         # self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
         # self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
