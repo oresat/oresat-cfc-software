@@ -13,8 +13,8 @@ import numpy as np
 import tifffile
 from olaf import Service, logger, new_oresat_file
 
-from .. import __version__
-from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
+from oresat_cfc import __version__
+from oresat_cfc.drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
 
 
 class CameraService(Service):
@@ -45,8 +45,7 @@ class CameraService(Service):
         self._start_capture_sequence_obj = rec["start_capture_sequence"]
         self._start_capture_sequence_obj.value = False
 
-        # self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
-        # self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
+        self.node.add_sdo_callbacks("camera", "status", self._on_read_status, self._on_write_status)
         self.node.add_sdo_callbacks(
             "camera",
             "integration_time",

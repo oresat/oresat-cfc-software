@@ -341,7 +341,8 @@ class Pirt1280:
         """
 
         if self._mock:
-            return bytes([random.randint(0, 255) for i in range(self.PIXEL_BYTES)])
+            return os.urandom(self.PIXEL_BYTES)
+            # return bytes([random.randint(0, 255) for i in range(self.PIXEL_BYTES)])
 
         # open the prucam char device
         fd = os.open(str(self.PRUCAM_PATH), os.O_RDWR)
