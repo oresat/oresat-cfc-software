@@ -1,58 +1,49 @@
-"""CFC OLAF app main"""
+import logging
+from argparse import ArgumentParser
 
-import os
+from oresat_libcanopend import NodeClient
 
-from olaf import app, olaf_run, olaf_setup, render_olaf_template, rest_api
-
-from . import __version__
 from .drivers.pirt1280 import Pirt1280
 from .drivers.rc625 import Rc625
+from .gen.od import CfcEntry
 from .services.camera import CameraService
 from .services.tec_controller import TecControllerService
+from .ui import Ui
 
-
-@rest_api.app.route("/cfc")
-def camera_template():
-    """Render the cfc template."""
-    return render_olaf_template("cfc.html", name="CFC (Cirrus Flux Camera)")
-
-
-@rest_api.app.route("/pid-graph")
-def tec_template():
-    """Render the tec template."""
-    return render_olaf_template("pid.html", name="TEC PID")
+PIRT1280_SPI = (1, 1)  # bus, device
+PIRT1280_GPIO = (1, 1)  # chip, line
+PIRT1280_ADC_PIN = 2
+TEC_GPIO = (1, 1)  # chip, line
 
 
 def main():
-    """Main for cfc olaf app."""
+    parser = ArgumentParser()
+    parser.add_argument("-m", "--mock-hw", action="store_true", help="mock hardware")
+    parser.add_argument("-v", "--verbose", action="store_true", help="verbose logging")
+    args = parser.parse_args()
 
-    path = os.path.dirname(os.path.abspath(__file__))
+    LOG_FMT = "%(levelname)s: %(filename)s:%(lineno)s - %(message)s"
+    logging.basicConfig(format=LOG_FMT)
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
 
-    args, _ = olaf_setup("cfc_processor")
-    mock_args = [i.lower() for i in args.mock_hw]
-    mock_camera = "camera" in mock_args or "all" in mock_args
-    mock_tec = "tec" in mock_args or "all" in mock_args
+    node = NodeClient(CfcEntry, debug=args.verbose)
 
-    camera_spi_bus = 1
-    camera_spi_device = 1
-    camera_enable_pin = "SENSOR_ENABLE"
-    camera_adc_num = 0
-    tec_enable_pin = "TEC_ENABLE"
+    pirt1280 = Pirt1280(PIRT1280_SPI, PIRT1280_GPIO, PIRT1280_ADC_PIN, args.mock_hw)
+    rc625 = Rc625(TEC_GPIO, args.mock_hw)
 
-    app.od["versions"]["sw_version"].value = __version__
+    camera_service = CameraService(node, pirt1280)
+    tec_service = TecControllerService(node, pirt1280, rc625)
+    ui = Ui(node, camera_service)
 
-    pirt1280 = Pirt1280(
-        camera_spi_bus, camera_spi_device, camera_enable_pin, camera_adc_num, mock_camera
-    )
-    rc6_25 = Rc625(tec_enable_pin, mock_tec)
-
-    app.add_service(CameraService(pirt1280))
-    app.add_service(TecControllerService(pirt1280, rc6_25))
-
-    rest_api.add_template(f"{path}/templates/cfc.html")
-    rest_api.add_template(f"{path}/templates/pid.html")
-
-    olaf_run()
+    tec_service.run(thread=True)
+    camera_service.run(thread=True)
+    try:
+        ui.run()
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

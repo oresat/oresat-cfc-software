@@ -136,3 +136,6 @@ dmypy.json
 
 # setuptools-scm
 _version.py
+
+# Generated files
+*/gen/

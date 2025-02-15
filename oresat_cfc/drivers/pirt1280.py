@@ -10,8 +10,9 @@ from enum import IntEnum
 from time import sleep
 from typing import Union
 
+import gpiod
 import numpy as np
-from olaf import Adc, Gpio
+from gpiod.line import Direction, Value
 from spidev import SpiDev  # pylint: disable=E0611
 
 
@@ -90,20 +91,32 @@ class Pirt1280:
 
     INTEGRATION_TIME_MAX_US = 80_000
 
-    def __init__(
-        self, spi_bus: int, spi_device: int, gpio_num: int, adc_pin: int, mock: bool = False
-    ):
-        self._gpio_num = gpio_num
+    ADC_VIN_V = 1.8
+    ADC_BITS = 12
+    ADC_MAX_VALUE = (2**ADC_BITS) - 1
+
+    def __init__(self, spi: tuple[int], gpio: tuple[int], adc_pin: int, mock: bool = False):
         self._mock = mock
-        self._adc = Adc(adc_pin, mock)
-        self._gpio = Gpio(gpio_num, mock=mock)
+        self._adc_pin = adc_pin
+        self._gpio_num = gpio[1]
+        if not mock:
+            self.gpio_lines = gpiod.request_lines(
+                f"/dev/gpiochip{gpio[0]}",
+                consumer="oresat-cfc",
+                config={
+                    self._gpio_num: gpiod.LineSettings(
+                        direction=Direction.OUTPUT,
+                        output_value=Value.INACTIVE,
+                    ),
+                },
+            )
         self._integration_time = -1  # reduce IO calls
 
         if mock:
             self._mock_regs = [0] * (list(Pirt1280Register)[-1].value + 1)
         else:
             self._spi = SpiDev()
-            self._spi.open(spi_bus, spi_device)
+            self._spi.open(spi[0], spi[1])
             self._spi.max_speed_hz = self.SPI_HZ
 
         self._enabled = False
@@ -114,9 +127,8 @@ class Pirt1280:
         if self._enabled:
             return
 
-        # set the enable GPIO high
         if not self._mock:
-            self._gpio.high()
+            self.gpio_lines.set_value(self._num, Value.ACTIVE)
 
         self._enabled = True
 
@@ -138,7 +150,7 @@ class Pirt1280:
         """Disable the PIRT1280 (power it off)."""
 
         if not self._mock:
-            self._gpio.low()
+            self.gpio_lines.set_value(self._num, Value.INACTIVE)
 
         self._enabled = False
         self._integration_time = -1
@@ -308,17 +320,22 @@ class Pirt1280:
 
         if frame_refclks != frb_read:
             raise Pirt1280Error(
-                f"readback to FT regs did not match 0x{frame_refclks:X} vs " f"0x{frb_read:X}"
+                f"readback to FT regs did not match 0x{frame_refclks:X} vs 0x{frb_read:X}"
             )
         if intr_refclks != irb_read:
             raise Pirt1280Error(
-                f"readback to IT regs did not match 0x{intr_refclks:X} vs " f"0x{irb_read:x}"
+                f"readback to IT regs did not match 0x{intr_refclks:X} vs 0x{irb_read:x}"
             )
 
     def _get_temp(self) -> float:
         """Get the raw temperature of the sensor."""
 
-        vout = self._adc.value
+        raw = self.ADC_MAX_VALUE / 2
+        if not self._mock:
+            adc_path = f"/sys/bus/iio/devices/iio:device0/in_voltage{self._adc_pin}_raw"
+            with open(adc_path, "r") as f:
+                raw = int(f.read())
+        vout = (raw / self.ADC_MAX_VALUE) * self.ADC_VIN_V
 
         # The 10k NTC is part of a voltage divider with a 10k resistor between
         # 1.8v and Vout and the NTC between Vout and ground. Thus, the equation is:
@@ -328,7 +345,7 @@ class Pirt1280:
         # We know volts and need to solve for NTC resistance, which is:
         #
         # NTC = (10k * Vout) / (1.8v - Vout)
-        res = (self.R1 * vout) / (self._adc.ADC_VIN - vout)
+        res = (self.R1 * vout) / (self.ADC_VIN_V - vout)
 
         # Per the steinhart/hart equation where A-D are the steinhart coefficients,
         # R25 is the NTC resistance at 25C(10k), and RT is the NTC resistance

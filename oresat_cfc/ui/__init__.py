@@ -1,0 +1,93 @@
+import base64
+import os
+
+import cv2
+import numpy as np
+from bottle import TEMPLATE_PATH, Bottle, template
+from oresat_libcanopend import NodeClient
+
+from ..__init__ import __version__
+from ..drivers.pirt1280 import Pirt1280, pirt1280_raw_to_numpy
+from ..gen.od import CfcEntry
+from ..services.camera import CameraService
+
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_PATH.append(DIR_PATH)
+
+
+class Ui(Bottle):
+    def __init__(self, node: NodeClient, camera: CameraService):
+        super().__init__()
+
+        self.node = node
+        self.camera = camera
+
+        self.route("/", "GET", self.get_index)
+        self.route("/image", "GET", self.get_image)
+        self.route("/image/raw", "GET", self.get_image_raw)
+        self.route("/data", "GET", self.get_data)
+
+    def get_index(self):
+        return template("./index.html", version=__version__)
+
+    def get_image(self) -> dict:
+        if self.camera.last_capture:
+            raw = self.camera.last_capture
+            img = make_display_image(raw, sat_percent=95, downscale_factor=2)
+        else:
+            raw = b"\x00" * Pirt1280.PIXEL_BYTES
+            img = make_display_image(raw, sat_percent=0, downscale_factor=2)
+        return {"image": base64.encodebytes(img).decode("utf-8")}
+
+    def get_image_raw(self) -> dict:
+        raw = self.camera.last_capture
+        return {"image": base64.encodebytes(raw).decode("utf-8")}
+
+    def get_data(self) -> dict:
+        return {
+            "camera": {
+                "status": self.node.od_read(CfcEntry.CAMERA_STATUS, use_enum=False),
+                "capture_delay": self.node.od_read(CfcEntry.CAMERA_CAPTURE_DELAY),
+                "number_to_capture": self.node.od_read(CfcEntry.CAMERA_NUMBER_TO_CAPTURE),
+                "save_captures": self.node.od_read(CfcEntry.CAMERA_SAVE_CAPTURES),
+                "integration_time": self.node.od_read(CfcEntry.CAMERA_INTEGRATION_TIME),
+                "temperature": self.node.od_read(CfcEntry.CAMERA_TEMPERATURE),
+                "last_capture_time": self.camera.last_capture_time,
+            },
+            "tec": {
+                "status": self.node.od_read(CfcEntry.TEC_STATUS, use_enum=False),
+                "saturated": self.node.od_read(CfcEntry.TEC_SATURATED),
+                "setpoint": self.node.od_read(CfcEntry.TEC_PID_SETPOINT),
+            },
+        }
+
+
+def make_display_image(raw: bytes, sat_percent: int = 0, downscale_factor: int = 1) -> bytes:
+    data = pirt1280_raw_to_numpy(raw)
+
+    # convert single pixel value int 3 values for BGR format (BGR values are all the same)
+    tmp = np.zeros((data.shape[0], data.shape[1], 3), dtype=data.dtype)
+    for i in range(3):
+        tmp[:, :, i] = data[:, :]
+    data = tmp
+
+    # manipulate image for displaying
+    data //= 64  # scale 14-bits to 8-bits
+    data = data.astype(np.uint8)  # imencode wants uint8 or uint64
+    data = np.invert(data)  # invert black/white values for displaying
+
+    # downscale image
+    if downscale_factor > 1:
+        data = np.copy(data[::downscale_factor, ::downscale_factor])
+
+    # color saturate pixel red
+    if sat_percent > 0:
+        sat_value = (255 * sat_percent) // 100
+        sat_pixels = np.where(data[:, :] >= [sat_value, sat_value, sat_value])
+        data[sat_pixels[0], sat_pixels[1]] = [0, 0, 255]  # red
+
+    ok, encoded = cv2.imencode(".jpg", data)  # pylint: disable=E1101
+    if not ok:
+        raise ValueError("jpg encode error")
+
+    return bytes(encoded)

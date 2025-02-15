@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>OreSat CFC {{version}}</title>
+  </head>
+  <body>
+    <style>
+      table {
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        margin-left: auto;
+        margin-right: auto;
+        width: 80%;
+      }
+      td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+        width: 50%;
+      }
+      #header {
+        text-align: center;
+      }
+      #grid {
+        text-align: center;
+        display: grid;
+        grid-template-columns: 25% 50% 25%;
+      }
+      #gridColum {
+        text-align: center;
+      }
+      #image {
+        width: 90%;
+      }
+    </style>
+    <div id="header">
+      <h2>OreSat CFC {{version}}</h2>
+    </div>
+    <div id="grid">
+      <div id="gridColumn">
+      </div>
+      <div id="gridColumn">
+        <!--the "//:0" is a basically the way to make any empty img-->
+        <img id="image" src="//:0" alt="camera"/>
+        <br/>
+        <button id="downloadRawImageButton" onclick="downloadRawImage()" disabled>Download Raw Image</button>
+        <button id="downloadDisplayImageButton" onclick="downloadDisplayImage()" disabled>Download Display Image</button>
+      </div>
+      <div id="gridColumn">
+        <h3>State Machine</h3>
+        <table>
+          <tr>
+            <td>Status</td>
+            <td><span id="cfcState">BOOT_LOCKOUT</span></td>
+          </tr>
+          <tr>
+            <td>Capture Delay</td>
+            <td><span id="captureDelay">1000</span> ms</td>
+          </tr>
+          <tr>
+            <td>Capture Amount</td>
+            <td><span id="captureAmount">1</span></td>
+          </tr>
+          <tr>
+            <td>Save Captures</td>
+            <td><span id="saveCaptures">TRUE</span></td>
+          </tr>
+        </table>
+        <br />
+        <h3>Camera</h3>
+        <table>
+          <tr>
+            <td>Enable Status</td>
+            <td><span id="cameraStatus">DISABLED</span></td>
+          </tr>
+          <tr>
+            <td>Integration Time</td>
+            <td><span id="cameraIntegrationTime">0</span> us</td>
+          </tr>
+          <tr>
+            <td>Current Temperature</td>
+            <td><span id="cameraTemperature">0</span> °C</td>
+          </tr>
+        </table>
+        <br />
+        <h3>TEC (Thermoelectric Cooler) Controller</h3>
+        <table>
+          <tr>
+            <td>Enable Status</td>
+            <td><span id="tecStatus">DISABLED</span></td>
+          </tr>
+          <tr>
+            <td>Saturation Status</td>
+            <td><span id="tecSaturated">SATURATED</span></td>
+          </tr>
+          <tr>
+            <td>Target Temperature</td>
+            <td><span id="tecSetpoint">0</span> °C</td>
+          </tr>
+        </table>
+        <br />
+        <div>
+          <button id="changeSettingsButton" disabled>Change Settings</button>
+        </div>
+      </div>
+    </div>
+    <dialog id="favDialog">
+      <form method="dialog">
+        <p>
+          <b>Change Settings</b>
+          <br>
+          <br>
+          <b>State Machine</b>
+          <br>
+          <br>
+          <label for="newState">State:</label>
+          <select id="newState" name="newState">
+            <option id="newStateOFF">OFF</option>
+            <option id="newStateSTANDBY">STANDBY</option>
+            <option id="newStateCAPTURE">CAPTURE</option>
+          </select>
+          <br>
+          <br>
+          <label for="newCapDelay">Capture Delay (ms):</label>
+          <input id="newCapDelay" type="number" step="1">
+          <br>
+          <br>
+          <label for="newCapAmount">Capture Amount:</label>
+          <input id="newCapAmount" type="number" step="1">
+          <br>
+          <br>
+          <label for="newCapSave">Save Captures:</label>
+          <input id="newCapSave" type="checkbox">
+          <br>
+          <br>
+          <b>Camera</b>
+          <br>
+          <br>
+          <label for="newIntTime">Integration Time (us) [Max: 80000]:</label>
+          <input id="newIntTime" type="number" min=1 max=80000>
+          <br>
+          <br>
+          <b>TEC</b>
+          <br>
+          <br>
+          <label for="newTecStatus">Enable:</label>
+          <input id="newTecStatus" type="checkbox">
+          <br>
+          <br>
+          <label for="newSetpoint">Target Temperature (°C):</label>
+          <input id="newSetpoint" type="number" step="1">
+        </p>
+        <div>
+          <button id="cancel" type="reset">Cancel</button>
+          <button id="submit" type="submit">Set</button>
+        </div>
+      </form>
+    </dialog>
+    <script>
+      const STATES = {
+        0x01: "OFF",
+        0x02: "STANDBY",
+        0x03: "CAPTURE",
+        0x04: "BOOT_LOCKOUT",
+        0xFF: "ERROR",
+      };
+      let lastCaptureTime = -1;
+      let lastDisplayImage = "";
+      const settingsButton = document.getElementById("changeSettingsButton");
+      const cancelButton = document.getElementById("cancel");
+      const submitButton = document.getElementById("submit");
+      const dialog = document.getElementById("favDialog");
+      dialog.returnValue = "cancel";
+
+      async function getData() {
+       const url = `http://${window.location.host}/data`;
+        return await fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            if (data.tec !== undefined) {
+              return data;
+            }
+          });
+      }
+
+      async function getImage() {
+       const url = `http://${window.location.host}/image`;
+        return await fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            return "data:image/jpeg;base64, " + data.image;
+          });
+      }
+
+      async function getImageRaw() {
+       const url = `http://${window.location.host}/image/raw`;
+        return await fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            return data.image;
+          });
+      }
+
+      async function openCheck(dialog) {
+        if (dialog.open) {
+          const data = await getData();
+          const stateStr = STATES[data.camera.status];
+
+          // change select options based off transistions
+          if (stateStr === "OFF") {
+            document.getElementById("newStateSTANDBY").disabled = false;
+            document.getElementById("newStateCAPTURE").disabled = true;
+            document.getElementById("newIntTime").disabled = true;
+          } else if (stateStr === "STANDBY" || stateStr === "CAPTURE") {
+            document.getElementById("newStateSTANDBY").disabled = false;
+            document.getElementById("newStateCAPTURE").disabled = false;
+            document.getElementById("newIntTime").disabled = false;
+          } else {
+            document.getElementById("newStateSTANDBY").disabled = true;
+            document.getElementById("newStateCAPTURE").disabled = true;
+            document.getElementById("newIntTime").disabled = true;
+          }
+
+          document.getElementById("newState").selectedIndex = data.camera.state - 1;
+          console.log(data);
+          document.getElementById("newCapSave").checked = data.camera.save_captures;
+          document.getElementById("newCapDelay").value = data.camera.capture_delay;
+          document.getElementById("newCapAmount").value = data.camera.number_to_capture;
+          document.getElementById("newIntTime").value = Math.round(data.camera.integration_time);
+          document.getElementById("newTecStatus").checked = data.tec.status;
+          document.getElementById("newSetpoint").value = data.tec.setpoint;
+        } else if (dialog.returnValue === "submit") {
+          const newData = {
+            "camera": {
+              "status": document.getElementById("newState").selectedIndex + 1,
+              "capture_delay": parseInt(document.getElementById("newCapDelay").value),
+              "number_to_capture": parseInt(document.getElementById("newCapAmount").value),
+              "save_captures": document.getElementById("newCapSave").checked,
+              "integration_time": parseInt(document.getElementById("newIntTime").value),
+            },
+            "tec": {
+              "status": document.getElementById("newTecStatus").checked,
+              "setpoint": document.getElementById("newSetpoint").value,
+            },
+          };
+
+          const options = {
+            "method": "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            "body": JSON.stringify(newData),
+          }
+
+          await fetch(url, options)
+            .then(response => response.json())
+            .then(data => {
+              return data;
+            });
+        }
+      }
+
+      /** Update button opens a modal dialog */
+      settingsButton.addEventListener("click", () => {
+        dialog.showModal();
+        openCheck(dialog);
+      });
+
+      /** Form cancel button closes the dialog box */
+      cancelButton.addEventListener("click", () => {
+        dialog.close("cancel");
+        openCheck(dialog);
+      });
+
+      /** Form submit button closes the dialog box */
+      submitButton.addEventListener("click", () => {
+        dialog.close("submit");
+        openCheck(dialog);
+      });
+
+      /** Let the user download the raw image */
+      async function downloadRawImage() {
+        let obj = await getImageRaw();
+        const unixTime = Math.floor(Date.now() / 1000);
+        downloadFile(`cfc_capture_${unixTime}.raw`, obj.value);
+      }
+
+      /** Let the user download the display image */
+      function downloadDisplayImage() {
+        const unixTime = Math.floor(Date.now() / 1000);
+        downloadFile(`cfc_capture_${unixTime}.jpg`, lastDisplayImage);
+      }
+
+      /** Let the user download a file */
+      function downloadFile(filename, data) {
+        const byteCharacters = atob(data);
+        const byteArrays = [];
+        const sliceSize = 512;
+
+        for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+          const slice = byteCharacters.slice(offset, offset + sliceSize);
+
+          const byteNumbers = new Array(slice.length);
+          for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+          }
+
+          const byteArray = new Uint8Array(byteNumbers);
+          byteArrays.push(byteArray);
+        }
+
+        const blob = new Blob(byteArrays, {
+          type: "application/octet-stream",
+        });
+
+        const a = document.createElement("a");
+        a.download = filename;
+        a.href = window.URL.createObjectURL(blob);
+        a.click();
+      }
+
+      /** Update all info / data being displayed */
+      async function update() {
+        const data = await getData();
+        let state = STATES[data.camera.status];
+
+        document.getElementById("cfcState").innerHTML = state;
+        document.getElementById("captureDelay").innerHTML = data.camera.capture_delay;
+        document.getElementById("captureAmount").innerHTML = data.camera.number_to_capture;
+        if (data.camera.save_captures === true) {
+          document.getElementById("saveCaptures").innerHTML = "TRUE";
+        } else {
+          document.getElementById("saveCaptures").innerHTML = "FALSE";
+        }
+
+        if (state === "BOOT_LOCKOUT") {
+          document.getElementById("changeSettingsButton").disabled = true;
+          document.getElementById("downloadRawImageButton").disabled = true;
+          document.getElementById("downloadDisplayImageButton").disabled = true;
+        } else {
+          document.getElementById("changeSettingsButton").disabled = false;
+          document.getElementById("downloadRawImageButton").disabled = false;
+          document.getElementById("downloadDisplayImageButton").disabled = false;
+        }
+
+        // get last image capture for display
+        if (state != "OFF" && data.camera.last_capture_time != lastCaptureTime) {
+          lastCaptureTime = data.camera.last_capture_time;
+          updateImage();
+        }
+
+        // get camera info
+        if (data.camera.enabled === true) {
+          document.getElementById("cameraStatus").innerHTML = "ENABLED";
+        } else {
+          document.getElementById("cameraStatus").innerHTML = "DISABLED";
+        }
+        document.getElementById("cameraTemperature").innerHTML = data.camera.temperature;
+        document.getElementById("cameraIntegrationTime").innerHTML = Math.round(data.camera.integration_time);
+
+        // update TEC info
+        if (data.tec.status === true) {
+          document.getElementById("tecStatus").innerHTML = "ENABLED";
+        } else {
+          document.getElementById("tecStatus").innerHTML = "DISABLED";
+        }
+        if (data.tec.saturated == true) {
+          document.getElementById("tecSaturated").innerHTML = "SATURATED";
+        } else {
+          document.getElementById("tecSaturated").innerHTML = "NOT_SATURATED";
+        }
+        document.getElementById("tecSetpoint").innerHTML = data.tec.setpoint;
+      }
+
+      async function updateImage() {
+        lastDisplayImage = await getImage();
+        document.getElementById("image").src = lastDisplayImage;
+      }
+
+      updateImage();
+      update();
+      const interval = setInterval(function() {
+        update();
+      }, 1000);
+    </script>
+  </body>
+</html>
