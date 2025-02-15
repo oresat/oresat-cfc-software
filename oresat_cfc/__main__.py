@@ -11,9 +11,9 @@ from .services.tec_controller import TecControllerService
 from .ui import Ui
 
 PIRT1280_SPI = (1, 1)  # bus, device
-PIRT1280_GPIO = (1, 1)  # chip, line
-PIRT1280_ADC_PIN = 2
-TEC_GPIO = (1, 1)  # chip, line
+PIRT1280_ENABLE_GPIO = (2, 22)  # chip, line
+PIRT1280_ADC_PIN = 0
+TEC_ENABLE_GPIO = (2, 24)  # chip, line
 
 
 def main():
@@ -29,10 +29,10 @@ def main():
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    node = NodeClient(CfcEntry, debug=args.verbose)
+    node = NodeClient(CfcEntry)
 
-    pirt1280 = Pirt1280(PIRT1280_SPI, PIRT1280_GPIO, PIRT1280_ADC_PIN, args.mock_hw)
-    rc625 = Rc625(TEC_GPIO, args.mock_hw)
+    pirt1280 = Pirt1280(PIRT1280_SPI, PIRT1280_ENABLE_GPIO, PIRT1280_ADC_PIN, args.mock_hw)
+    rc625 = Rc625(TEC_ENABLE_GPIO, args.mock_hw)
 
     camera_service = CameraService(node, pirt1280)
     tec_service = TecControllerService(node, pirt1280, rc625)
