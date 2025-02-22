@@ -1,9 +1,9 @@
 import base64
 import os
+from threading import Event
 
 import cv2
 import numpy as np
-from bottle import TEMPLATE_PATH, Bottle, request, template
 from oresat_libcanopend import NodeClient
 
 from ..__init__ import __version__
@@ -11,24 +11,42 @@ from ..drivers.pirt1280 import Pirt1280, pirt1280_raw_to_numpy
 from ..gen.od import CfcEntry
 from ..services.camera import CameraService
 
-DIR_PATH = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_PATH.append(DIR_PATH)
+try:
+    from bottle import TEMPLATE_PATH
+
+    DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+    TEMPLATE_PATH.append(DIR_PATH)
+except ImportError:
+    pass
 
 
-class Ui(Bottle):
+class Ui:
     def __init__(self, node: NodeClient, camera: CameraService):
-        super().__init__()
-
         self.node = node
         self.camera = camera
+        try:
+            from bottle import Bottle
 
-        self.route("/", "GET", self.get_index)
-        self.route("/image", "GET", self.get_image)
-        self.route("/image/raw", "GET", self.get_image_raw)
-        self.route("/data", "GET", self.get_data)
-        self.route("/data", "PUT", self.put_data)
+            self.app = Bottle()
+
+            self.app.route("/", "GET", self.get_index)
+            self.app.route("/image", "GET", self.get_image)
+            self.app.route("/image/raw", "GET", self.get_image_raw)
+            self.app.route("/data", "GET", self.get_data)
+            self.app.route("/data", "PUT", self.put_data)
+        except ImportError:
+            self.app = None
+
+    def run(self):
+        if self.app:
+            self.app.run(port=5000, quiet=True)
+        else:
+            while True:
+                Event().wait()
 
     def get_index(self):
+        from bottle import template
+
         return template("./index.html", version=__version__)
 
     def get_image(self) -> dict:
@@ -63,6 +81,8 @@ class Ui(Bottle):
         }
 
     def put_data(self):
+        from bottle import request
+
         if "camera" in request.json:
             camera_data = request.json["camera"]
             if "capture_delay" in camera_data:
