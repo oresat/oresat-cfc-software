@@ -81,7 +81,8 @@ class CameraService:
             logging.exception(e)
             new_state = CfcCameraStatus.ERROR
 
-        logging.info(f"state transistion {self._state.name} -> {new_state.name}")
+        if self._state != new_state:
+            logging.info(f"state transistion {self._state.name} -> {new_state.name}")
 
         self._state = new_state
 

@@ -3,7 +3,7 @@ import os
 
 import cv2
 import numpy as np
-from bottle import TEMPLATE_PATH, Bottle, template
+from bottle import TEMPLATE_PATH, Bottle, request, template
 from oresat_libcanopend import NodeClient
 
 from ..__init__ import __version__
@@ -26,6 +26,7 @@ class Ui(Bottle):
         self.route("/image", "GET", self.get_image)
         self.route("/image/raw", "GET", self.get_image_raw)
         self.route("/data", "GET", self.get_data)
+        self.route("/data", "PUT", self.put_data)
 
     def get_index(self):
         return template("./index.html", version=__version__)
@@ -60,6 +61,32 @@ class Ui(Bottle):
                 "setpoint": self.node.od_read(CfcEntry.TEC_PID_SETPOINT),
             },
         }
+
+    def put_data(self):
+        if "camera" in request.json:
+            camera_data = request.json["camera"]
+            if "capture_delay" in camera_data:
+                self.node.od_write(CfcEntry.CAMERA_CAPTURE_DELAY, camera_data["capture_delay"])
+            if "number_to_capture" in camera_data:
+                self.node.od_write(
+                    CfcEntry.CAMERA_NUMBER_TO_CAPTURE, camera_data["number_to_capture"]
+                )
+            if "save_captures" in camera_data:
+                self.node.od_write(CfcEntry.CAMERA_SAVE_CAPTURES, camera_data["save_captures"])
+            if "integration_time" in camera_data:
+                self.node.od_write(
+                    CfcEntry.CAMERA_INTEGRATION_TIME, camera_data["integration_time"]
+                )
+        if "tec" in request.json:
+            tec_data = request.json["tec"]
+            if "status" in tec_data:
+                self.node.od_write(CfcEntry.TEC_STATUS, tec_data["status"])
+            if "setpoint" in tec_data:
+                self.node.od_write(CfcEntry.TEC_PID_SETPOINT, tec_data["setpoint"])
+
+        # do this last
+        if "camera" in request.json and "status" in request.json["camera"]:
+            self.camera._set_state(request.json["camera"]["status"])
 
 
 def make_display_image(raw: bytes, sat_percent: int = 0, downscale_factor: int = 1) -> bytes:

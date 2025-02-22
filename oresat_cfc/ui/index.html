@@ -221,8 +221,7 @@
             document.getElementById("newIntTime").disabled = true;
           }
 
-          document.getElementById("newState").selectedIndex = data.camera.state - 1;
-          console.log(data);
+          document.getElementById("newState").selectedIndex = data.camera.status - 1;
           document.getElementById("newCapSave").checked = data.camera.save_captures;
           document.getElementById("newCapDelay").value = data.camera.capture_delay;
           document.getElementById("newCapAmount").value = data.camera.number_to_capture;
@@ -240,7 +239,7 @@
             },
             "tec": {
               "status": document.getElementById("newTecStatus").checked,
-              "setpoint": document.getElementById("newSetpoint").value,
+              "setpoint": parseInt(document.getElementById("newSetpoint").value),
             },
           };
 
@@ -252,11 +251,8 @@
             "body": JSON.stringify(newData),
           }
 
-          await fetch(url, options)
-            .then(response => response.json())
-            .then(data => {
-              return data;
-            });
+          const url = `http://${window.location.host}/data`;
+          await fetch(url, options);
         }
       }
 

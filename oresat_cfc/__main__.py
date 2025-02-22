@@ -41,7 +41,7 @@ def main():
     tec_service.run(thread=True)
     camera_service.run(thread=True)
     try:
-        ui.run()
+        ui.run(port=5000, quiet=True)
     except KeyboardInterrupt:
         pass
 
