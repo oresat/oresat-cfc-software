@@ -39,7 +39,7 @@ class Ui:
 
     def run(self):
         if self.app:
-            self.app.run(port=5000, quiet=True)
+            self.app.run(port=8000, quiet=True)
         else:
             while True:
                 Event().wait()
