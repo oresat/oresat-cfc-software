@@ -32,15 +32,11 @@ class TecControllerService:
         self._tec = rc6_25
         self._tec.disable()  # make sure this is disabled by default
 
-        self._node.request_ownership
-
-        self._node.request_ownership(CfcEntry.TEC_STATUS, None, self.enable)
-        self._node.request_ownership(
-            CfcEntry.TEC_PID_SETPOINT, self._get_pid_setpoint, self._set_pid_setpoint
-        )
-        self._node.request_ownership(CfcEntry.TEC_PID_KP, self._get_pid_kp, self._set_pid_kp)
-        self._node.request_ownership(CfcEntry.TEC_PID_KI, self._get_pid_ki, self._set_pid_ki)
-        self._node.request_ownership(CfcEntry.TEC_PID_KD, self._get_pid_kd, self._set_pid_kd)
+        self._node.add_write_callback(CfcEntry.TEC_STATUS, self.enable)
+        self._node.add_write_callback(CfcEntry.TEC_PID_SETPOINT, self._set_pid_setpoint)
+        self._node.add_write_callback(CfcEntry.TEC_PID_KP, self._set_pid_kp)
+        self._node.add_write_callback(CfcEntry.TEC_PID_KI, self._set_pid_ki)
+        self._node.add_write_callback(CfcEntry.TEC_PID_KD, self._set_pid_kd)
 
         self._pid = PID(
             Kp=self._node.od_read(CfcEntry.TEC_PID_KP),
@@ -144,18 +140,6 @@ class TecControllerService:
         elif not value and self._controller_enabled:
             logging.info("disabling TEC controller")
         self._controller_enabled = value
-
-    def _get_pid_setpoint(self) -> int:
-        return self._pid.setpoint
-
-    def _get_pid_kp(self) -> float:
-        return self._pid.Kp
-
-    def _get_pid_ki(self) -> float:
-        return self._pid.Ki
-
-    def _get_pid_kd(self) -> float:
-        return self._pid.Kd
 
     def _set_pid_setpoint(self, setpoint: int):
         self._pid.setpoint = setpoint

@@ -43,7 +43,7 @@ class CameraService:
         self._node = node
         self._pirt1280 = pirt1280
 
-        self._node.request_ownership(CfcEntry.CAMERA_STATUS, None, self._set_state)
+        self._node.add_write_callback(CfcEntry.CAMERA_STATUS, self._set_state)
 
         self._state = CfcCameraStatus.BOOT_LOCKOUT
         self._next_state_internal = -1
