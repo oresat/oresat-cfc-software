@@ -8,22 +8,29 @@ See https://github.com/oresat/oresat-prucam-pirt1280 for more info.
 
 ## Quickstart
 
+Generate OD Entries
+
+```bash
+pip3 install oresat-configs
+oresat-configs canopend cfc -d oresat_cfc/gen
+```
+
 Install dependenies
 
 ```bash
-$ pip3 install .
+pip3 install .
 ```
 Make a virtual CAN bus
 
 ```bash
-$ sudo ip link add dev vcan0 type vcan
-$ sudo ip link set vcan0 up
+sudo ip link add dev vcan0 type vcan
+sudo ip link set vcan0 up
 ```
 
 Run the CFC app
 
 ```bash
-$ python3 -m oresat_cfc
+python3 -m oresat_cfc
 ```
 
 Can select the CAN bus to use (`vcan0`, `can0`, etc) with the `-b BUS` arg.
@@ -42,7 +49,7 @@ at `http://localhost:8000`.
 Install optional UI
 
 ```bash
-$ pip3 install bottle
+pip3 install bottle
 ```
 
 [Bottle]: https://bottlepy.org/docs/dev/
