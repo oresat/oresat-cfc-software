@@ -6,10 +6,12 @@ enabled or not.
 """
 
 import logging
+import os
 from threading import Event, Thread
 from time import monotonic, time
 
 import tifffile
+import zmq
 from oresat_libcanopend import NodeClient
 
 from .. import __version__
@@ -42,6 +44,10 @@ class CameraService:
 
         self._node = node
         self._pirt1280 = pirt1280
+
+        self._context = zmq.Context()
+        self._socket = self._context.socket(zmq.PUB)
+        self._socket.bind("tcp://*:7000")
 
         self._node.add_write_callback(CfcEntry.CAMERA_STATUS, self._set_state)
 
@@ -170,6 +176,17 @@ class CameraService:
                 metadata=metadata,
                 photometric="miniswhite",
             )
+
+            try:
+                self._node.add_file(file_name)
+                os.remove(file_name)
+            except Exception:
+                logging.error("failed to add capture to cache")
+
+        try:
+            self._socket.send(self.last_capture)
+        except Exception:
+            logging.error("failed to stream capture")
 
     def _set_state(self, value: int):
         self._next_state_user = value
