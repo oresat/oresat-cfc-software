@@ -16,23 +16,19 @@ from oresat_libcanopend import NodeClient
 
 from .. import __version__
 from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
-from ..gen.od import CfcCameraStatus, CfcEntry
+from ..gen.od import CameraStatus, CfcEntry
 
 STATE_TRANSMISSIONS = {
-    CfcCameraStatus.OFF: [CfcCameraStatus.OFF, CfcCameraStatus.STANDBY],
-    CfcCameraStatus.STANDBY: [
-        CfcCameraStatus.OFF,
-        CfcCameraStatus.STANDBY,
-        CfcCameraStatus.CAPTURE,
+    CameraStatus.OFF: [CameraStatus.OFF, CameraStatus.STANDBY],
+    CameraStatus.STANDBY: [CameraStatus.OFF, CameraStatus.STANDBY, CameraStatus.CAPTURE],
+    CameraStatus.CAPTURE: [
+        CameraStatus.OFF,
+        CameraStatus.STANDBY,
+        CameraStatus.CAPTURE,
+        CameraStatus.ERROR,
     ],
-    CfcCameraStatus.CAPTURE: [
-        CfcCameraStatus.OFF,
-        CfcCameraStatus.STANDBY,
-        CfcCameraStatus.CAPTURE,
-        CfcCameraStatus.ERROR,
-    ],
-    CfcCameraStatus.BOOT_LOCKOUT: [CfcCameraStatus.OFF],
-    CfcCameraStatus.ERROR: [CfcCameraStatus.OFF, CfcCameraStatus.ERROR],
+    CameraStatus.BOOT_LOCKOUT: [CameraStatus.OFF],
+    CameraStatus.ERROR: [CameraStatus.OFF, CameraStatus.ERROR],
 }
 
 
@@ -51,7 +47,7 @@ class CameraService:
 
         self._node.add_write_callback(CfcEntry.CAMERA_STATUS, self._set_state)
 
-        self._state = CfcCameraStatus.BOOT_LOCKOUT
+        self._state = CameraStatus.BOOT_LOCKOUT
         self._next_state_internal = -1
         self._next_state_user = -1
         self._count = 0
@@ -62,30 +58,30 @@ class CameraService:
         self._thread = Thread(target=self._thread_run, daemon=True)
         self._event = Event()
 
-    def _state_machine_transition(self, new_state: [CfcCameraStatus, int]):
-        if new_state not in list(CfcCameraStatus) and new_state not in [
-            s.value for s in list(CfcCameraStatus)
+    def _state_machine_transition(self, new_state: [CameraStatus, int]):
+        if new_state not in list(CameraStatus) and new_state not in [
+            s.value for s in list(CameraStatus)
         ]:
             logging.error(f"invalid new state {new_state}")
             return
 
         if isinstance(new_state, int):
-            new_state = CfcCameraStatus(new_state)
+            new_state = CameraStatus(new_state)
 
         if new_state not in STATE_TRANSMISSIONS[self._state]:
             logging.error(f"invalid state transistion {self._state.name} -> {new_state.name}")
             return
 
         try:
-            if new_state in [CfcCameraStatus.OFF, CfcCameraStatus.ERROR]:
+            if new_state in [CameraStatus.OFF, CameraStatus.ERROR]:
                 self._pirt1280.disable()
-            elif new_state == CfcCameraStatus.STANDBY:
+            elif new_state == CameraStatus.STANDBY:
                 self._pirt1280.enable()
-            elif new_state == CfcCameraStatus.CAPTURE:
+            elif new_state == CameraStatus.CAPTURE:
                 self._count = 0
         except Pirt1280Error as e:
             logging.exception(e)
-            new_state = CfcCameraStatus.ERROR
+            new_state = CameraStatus.ERROR
 
         if self._state != new_state:
             logging.info(f"state transistion {self._state.name} -> {new_state.name}")
@@ -110,8 +106,8 @@ class CameraService:
         save_captures = self._node.od_read(CfcEntry.CAMERA_SAVE_CAPTURES)
         capture_delay_ms = self._node.od_read(CfcEntry.CAMERA_CAPTURE_DELAY)
 
-        if self._state == CfcCameraStatus.BOOT_LOCKOUT and monotonic() > self._BOOT_LOCKOUT_S:
-            self._next_state_internal = CfcCameraStatus.OFF.value
+        if self._state == CameraStatus.BOOT_LOCKOUT and monotonic() > self._BOOT_LOCKOUT_S:
+            self._next_state_internal = CameraStatus.OFF.value
 
         if self._next_state_internal != -1:
             self._state_machine_transition(self._next_state_internal)
@@ -121,18 +117,18 @@ class CameraService:
             self._next_state_user = -1
 
         delay = 0.1
-        if self._state == CfcCameraStatus.CAPTURE:
+        if self._state == CameraStatus.CAPTURE:
             self._count += 1
 
             try:
                 self._pirt1280.integration_time = integration_time_us
                 self.capture(save_captures)
             except Pirt1280Error:
-                self._next_state_internal = CfcCameraStatus.ERROR.value
+                self._next_state_internal = CameraStatus.ERROR.value
                 delay = 0
-        elif self._state not in list(CfcCameraStatus):
+        elif self._state not in list(CameraStatus):
             logging.error(f"was in unknown state {self._state}, resetting to OFF")
-            self._next_state_internal = CfcCameraStatus.OFF.value
+            self._next_state_internal = CameraStatus.OFF.value
             delay = 0
 
         self._node.od_write_multi(
@@ -142,10 +138,10 @@ class CameraService:
             }
         )
 
-        if self._state == CfcCameraStatus.CAPTURE:
+        if self._state == CameraStatus.CAPTURE:
             if 0 < capture_count < self._count:
                 # that was the last capture in a sequence requested
-                self._next_state_internal = CfcCameraStatus.STANDBY.value
+                self._next_state_internal = CameraStatus.STANDBY.value
             else:  # no limit
                 delay = max((capture_delay_ms / 1000) - (monotonic() - ts), 0)
 
