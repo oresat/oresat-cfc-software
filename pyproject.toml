@@ -23,6 +23,7 @@ dependencies = [
     "gpiod",
     "numpy",
     "oresat-libcanopend",
+    "pyzmq",
     "simple-pid",
     "spidev",
     "tifffile",
