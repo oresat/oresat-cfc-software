@@ -14,7 +14,7 @@ from simple_pid import PID
 
 from ..drivers.pirt1280 import Pirt1280
 from ..drivers.rc625 import Rc625
-from ..gen.od import CfcEntry
+from ..gen.cfc_od import CfcEntry
 
 
 class TecControllerService:

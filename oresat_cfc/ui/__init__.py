@@ -8,7 +8,7 @@ from oresat_libcanopend import NodeClient
 
 from ..__init__ import __version__
 from ..drivers.pirt1280 import Pirt1280, pirt1280_raw_to_numpy
-from ..gen.od import CfcEntry
+from ..gen.cfc_od import CfcEntry
 from ..services.camera import CameraService
 
 try:

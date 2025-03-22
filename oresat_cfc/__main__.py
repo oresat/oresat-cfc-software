@@ -5,7 +5,7 @@ from oresat_libcanopend import NodeClient
 
 from .drivers.pirt1280 import Pirt1280
 from .drivers.rc625 import Rc625
-from .gen.od import CfcEntry
+from .gen.cfc_od import CfcEntry
 from .services.camera import CameraService
 from .services.tec_controller import TecControllerService
 from .ui import Ui
