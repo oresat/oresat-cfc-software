@@ -1,3 +1,6 @@
+name: cfc
+nice_name: CFC
+
 objects:
   - index: 0x4000
     name: camera

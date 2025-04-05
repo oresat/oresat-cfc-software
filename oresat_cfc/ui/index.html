@@ -188,7 +188,7 @@
         return await fetch(url)
           .then(response => response.json())
           .then(data => {
-            return "data:image/jpeg;base64, " + data.image;
+            return data.image;
           });
       }
 
@@ -249,7 +249,7 @@
               "Content-Type": "application/json",
             },
             "body": JSON.stringify(newData),
-          }
+          };
 
           const url = `http://${window.location.host}/data`;
           await fetch(url, options);
@@ -370,7 +370,7 @@
 
       async function updateImage() {
         lastDisplayImage = await getImage();
-        document.getElementById("image").src = lastDisplayImage;
+        document.getElementById("image").src = "data:image/jpeg;base64, " + lastDisplayImage;
       }
 
       updateImage();
