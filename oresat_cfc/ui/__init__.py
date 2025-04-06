@@ -47,7 +47,7 @@ class Ui:
     def get_index(self):
         from bottle import template
 
-        return template("./index.html", version=__version__)
+        return template("./index.tpl", version=__version__)
 
     def get_image(self) -> dict:
         if self.camera.last_capture:
