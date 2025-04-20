@@ -42,8 +42,8 @@ ui = [
 [project.scripts]
 oresat-cfc = "oresat_cfc.__main__:main"
 
-[tool.setuptools.packages.find]
-exclude = ["docs*", "*_ui"]
+[tool.setuptools.package-data]
+"*" = ["*.tpl"]
 
 [tool.setuptools_scm]
 write_to = "oresat_cfc/_version.py"
