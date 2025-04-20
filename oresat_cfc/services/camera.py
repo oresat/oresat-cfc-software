@@ -12,7 +12,7 @@ from time import monotonic, time
 
 import tifffile
 import zmq
-from oresat_libcanopend import NodeClient
+from oresat_canopend import NodeClient
 
 from .. import __version__
 from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
