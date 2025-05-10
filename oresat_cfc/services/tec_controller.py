@@ -9,7 +9,7 @@ import logging
 from threading import Event, Thread
 from time import monotonic
 
-from oresat_canopend import NodeClient
+from oresat_cand import NodeClient
 from simple_pid import PID
 
 from ..drivers.pirt1280 import Pirt1280

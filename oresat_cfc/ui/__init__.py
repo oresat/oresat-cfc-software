@@ -4,7 +4,7 @@ from threading import Event
 
 import cv2
 import numpy as np
-from oresat_canopend import NodeClient
+from oresat_cand import NodeClient
 
 from ..__init__ import __version__
 from ..drivers.pirt1280 import Pirt1280, pirt1280_raw_to_numpy

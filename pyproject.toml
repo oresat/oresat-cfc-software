@@ -22,7 +22,7 @@ classifiers = [
 dependencies = [
     "gpiod",
     "numpy",
-    "oresat-canopend",
+    "oresat-cand",
     "pyzmq",
     "simple-pid",
     "spidev",

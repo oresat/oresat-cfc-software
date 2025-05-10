@@ -1,7 +1,7 @@
 import logging
 from argparse import ArgumentParser
 
-from oresat_canopend import NodeClient
+from oresat_cand import NodeClient
 
 from .drivers.pirt1280 import Pirt1280
 from .drivers.rc625 import Rc625

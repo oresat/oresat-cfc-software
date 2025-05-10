@@ -12,11 +12,11 @@ from time import monotonic, time
 
 import tifffile
 import zmq
-from oresat_canopend import NodeClient
+from oresat_cand import NodeClient
 
 from .. import __version__
 from ..drivers.pirt1280 import Pirt1280, Pirt1280Error, pirt1280_raw_to_numpy
-from ..gen.cfc_od import CfcEntry, CfcCameraStatus
+from ..gen.cfc_od import CfcCameraStatus, CfcEntry
 
 STATE_TRANSMISSIONS = {
     CfcCameraStatus.OFF: [CfcCameraStatus.OFF, CfcCameraStatus.STANDBY],
