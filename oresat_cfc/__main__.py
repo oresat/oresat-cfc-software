@@ -1,5 +1,6 @@
 import logging
 from argparse import ArgumentParser
+from pathlib import Path
 
 from oresat_cand import NodeClient
 
@@ -29,7 +30,8 @@ def main():
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    node = NodeClient(CfcEntry)
+    od_config_path = Path(__file__).parent / "gen/od.csv"
+    node = NodeClient(CfcEntry, od_config_path=od_config_path)
 
     pirt1280 = Pirt1280(PIRT1280_SPI, PIRT1280_ENABLE_GPIO, PIRT1280_ADC_PIN, args.mock_hw)
     rc625 = Rc625(TEC_ENABLE_GPIO, args.mock_hw)
