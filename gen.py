@@ -9,12 +9,20 @@ OD_CONFIG_PATH = "od.yaml"
 GEN_DIR_PATH = "oresat_cfc/gen"
 
 parser = ArgumentParser()
-parser.add_argument("gen", nargs="?", choices=["code", "dbc", "clean"], default="code")
+subparsers = parser.add_subparsers(dest="subcommand")
+
+subparser = subparsers.add_parser("code", help="generate code for project")
+
+subparser = subparsers.add_parser("dbc", help="generate dbc file")
+subparser.add_argument("-n", "--node-id", default=0x7C)
+
+subparser = subparsers.add_parser("clean", help="clean up generated code")
+
 args = parser.parse_args()
 
-if args.gen == "code":
+if args.subcommand in ("code", None):
     gen_cand_files(OD_CONFIG_PATH, GEN_DIR_PATH)
-elif args.gen == "dbc":
-    gen_dbc_node(OD_CONFIG_PATH)
-elif args.gen == "clean":
+elif args.subcommand == "dbc":
+    gen_dbc_node(OD_CONFIG_PATH, node_id=args.node_id)
+elif args.subcommand == "clean":
     shutil.rmtree(GEN_DIR_PATH, ignore_errors=True)

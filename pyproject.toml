@@ -43,7 +43,7 @@ ui = [
 oresat-cfc = "oresat_cfc.__main__:main"
 
 [tool.setuptools.package-data]
-"*" = ["*.tpl"]
+"*" = ["*.tpl", "*.csv"]
 
 [tool.setuptools_scm]
 write_to = "oresat_cfc/_version.py"
